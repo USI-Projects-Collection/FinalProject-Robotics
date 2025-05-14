@@ -254,3 +254,6 @@ AMENT_IGNORE
 
 ### pixi ###
 .pixi
+
+# macOS
+.DS_Store
