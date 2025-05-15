@@ -14,7 +14,7 @@ class AStarPlanner(Node):
 
         self.sub_map   = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
         self.sub_goal  = self.create_subscription(PoseStamped, '/goal_pose', self.goal_cb, 10)
-        self.sub_odom  = self.create_subscription(PoseStamped, '/start_pose', self.pose_cb, 10)  # usa odom reale più avanti
+        self.sub_odom  = self.create_subscription(PoseStamped, '/current_pose', self.pose_cb, 10)  # usa odom reale più avanti
 
         self.pub_path  = self.create_publisher(Path, '/plan', 10)
         self.pub_cmd   = self.create_publisher(Twist, '/cmd_vel', 10)
