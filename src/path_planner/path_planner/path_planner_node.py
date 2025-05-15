@@ -30,6 +30,7 @@ class AStarPlanner(Node):
 
     def pose_cb(self, msg):
         self.current_pose = msg
+        self.get_logger().info('Posa iniziale ricevuta')
 
     def goal_cb(self, goal):
         if self.grid is None or self.current_pose is None:
