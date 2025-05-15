@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import rclpy, numpy as np, heapq
+import rclpy, numpy as np, heapq, math
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import PoseStamped, Twist
@@ -39,6 +39,7 @@ class AStarPlanner(Node):
         start = self.world2grid(self.current_pose.pose.position)
         g     = self.world2grid(goal.pose.position)
         path  = self.astar(start, g)
+        path = self._prune_path(path)
         self.publish_path(path, goal.header.frame_id)
 
     # ---------- util ----------
@@ -58,7 +59,8 @@ class AStarPlanner(Node):
         open_set = [(h(start), 0, start, None)]
         came = {}
         cost = {start: 0}
-        dirs = [(1,0),(-1,0),(0,1),(0,-1)]
+        dirs = [(1,0),(-1,0),(0,1),(0,-1), (1,1),(1,-1),(-1,1),(-1,-1)]
+        diag_cost = math.sqrt(2)
 
         while open_set:
             _, g_cost, cur, parent = heapq.heappop(open_set)
@@ -71,9 +73,13 @@ class AStarPlanner(Node):
                 nxt = (cur[0]+dx, cur[1]+dy)
                 if not (0 <= nxt[0] < self.grid.shape[1] and 0 <= nxt[1] < self.grid.shape[0]):
                     continue
+                if dx and dy:  # moving diagonally
+                    if self.grid[cur[1], cur[0]+dx] >= 50 or self.grid[cur[1]+dy, cur[0]] >= 50:
+                        continue
                 if self.grid[nxt[1], nxt[0]] >= 50:           # occupato
                     continue
-                newc = g_cost + 1
+                step = diag_cost if dx and dy else 1
+                newc = g_cost + step
                 if newc < cost.get(nxt, 1e9):
                     cost[nxt] = newc
                     heapq.heappush(open_set, (newc + h(nxt), newc, nxt, cur))
@@ -84,6 +90,38 @@ class AStarPlanner(Node):
             path.append(n)
             n = came.get(n)
         return path[::-1]
+
+    def _has_los(self, a, b):
+        # Bresenham line algorithm to check free line of sight on self.grid
+        x0, y0 = a; x1, y1 = b
+        dx = abs(x1 - x0); sx = 1 if x0 < x1 else -1
+        dy = -abs(y1 - y0); sy = 1 if y0 < y1 else -1
+        err = dx + dy
+        while True:
+            if self.grid[y0, x0] >= 50:
+                return False
+            if (x0, y0) == (x1, y1):
+                return True
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx
+                y0 += sy
+
+    def _prune_path(self, cells):
+        if len(cells) < 3:
+            return cells
+        pruned = [cells[0]]
+        idx = 2
+        while idx < len(cells):
+            if self._has_los(pruned[-1], cells[idx]):
+                idx += 1
+            else:
+                pruned.append(cells[idx - 1])
+        pruned.append(cells[-1])
+        return pruned
 
     def publish_path(self, cells, frame_id):
         msg = Path()
@@ -98,7 +136,7 @@ class AStarPlanner(Node):
             msg.poses.append(p)
 
         self.pub_path.publish(msg)
-        self.get_logger().info(f'Path con {len(cells)} punti pubblicato')
+        self.get_logger().info(f'Path con {len(cells)} punti pubblicato (dopo pruning)')
 
 def main():
     rclpy.init()
