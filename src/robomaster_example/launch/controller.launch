@@ -16,6 +16,9 @@
   <!-- Create a launch argument. It can be used to supply values on the command line, 
        with the following syntax: ros2 launch <package_name> <launch_file> name:=rm0 -->
   <arg name="name" default="rm0"/>
+  <!-- <include file="$(find-pkg-share robomaster_example)/launch/ep_tof.launch">
+    <arg name="name" value="$(var name)"/>
+  </include> -->
   
   <!-- 
        Start a ROS node, equivalent to: ros2 run <package_name> <executable_name> 
