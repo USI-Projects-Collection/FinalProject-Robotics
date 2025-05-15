@@ -42,10 +42,12 @@ class MappingNode(Node):
         
         # Sensor positions relative to robot center (x, y, theta)
         self.sensor_poses = {
-            'range_0': (-0.1, -0.1, math.pi),    # back-right (pointing backward)
-            'range_1': (0.1, -0.1, 0.0),         # front-right (pointing forward)
-            'range_2': (-0.1, 0.1, math.pi),     # back-left (pointing backward) 
-            'range_3': (0.1, 0.1, 0.0)           # front-left (pointing forward)
+            # (x, y, theta) of each ToF sensor relative to the robot centre
+            # values taken from ep_tof.launch (xyz in metres, rpy in radians)
+            'range_0': (-0.10703, -0.0996, -2.79253),   # tof_0  ≈ -160 °
+            'range_1': ( 0.10297, -0.0996, -0.34907),   # tof_1  ≈  -20 °
+            'range_2': (-0.10703,  0.0996,  2.79253),   # tof_2  ≈ +160 °
+            'range_3': ( 0.10297,  0.0996,  0.34907)    # tof_3  ≈  +20 °
         }
         
         # Publishers
@@ -298,6 +300,18 @@ class MappingNode(Node):
         grid_msg.info.resolution = self.map_resolution
         grid_msg.info.width = self.map_width
         grid_msg.info.height = self.map_height
+        # ----------------------  set the map origin  ----------------------
+        grid_msg.info.origin.position.x = float(self.map_origin_x)
+        grid_msg.info.origin.position.y = float(self.map_origin_y)
+        grid_msg.info.origin.position.z = 0.0
+
+        # No rotation between map and world (yaw = 0)
+        q = quaternion_from_euler(0.0, 0.0, 0.0)
+        grid_msg.info.origin.orientation.x = q[0]
+        grid_msg.info.origin.orientation.y = q[1]
+        grid_msg.info.origin.orientation.z = q[2]
+        grid_msg.info.origin.orientation.w = q[3]
+        # -----------------------------------------------------------------
         
         # Set map origin to align with RViz2 grid
         grid_msg.info.origin.position.x = self.map_origin_x
