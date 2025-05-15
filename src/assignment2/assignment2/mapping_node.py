@@ -73,7 +73,7 @@ class MappingNode(Node):
         self.linear_speed = 0.1  # meters/second
         self.obstacle_threshold = 0.3  # meters - stop when obstacle is this close
         
-        self.get_logger().info("Mpping node initialized")
+        self.get_logger().info("Mapping node initialized")
 
     def scan_range0_callback(self, msg):
         if msg.range >= self.min_sensor_range and msg.range <= self.max_sensor_range:
@@ -106,19 +106,10 @@ class MappingNode(Node):
 
         self.get_logger().info(f"Initial pose received: {self.pose_2d}")
 
-        # Set map origin so the robot is at the center of the map
+        # Set map origin to robot's initial position
         x_init, y_init, _ = self.pose_2d
-        self.map_origin_x = x_init - (self.map_width * self.map_resolution) / 2.0
-        self.map_origin_y = y_init - (self.map_height * self.map_resolution) / 2.0
-
-        # Mark the robot's initial position as free
-        center_x, center_y = self.world_to_map(x_init, y_init)
-        radius = 5  # cells
-        
-        for i in range(-radius, radius+1):
-            for j in range(-radius, radius+1):
-                if 0 <= center_y + i < self.map_height and 0 <= center_x + j < self.map_width:
-                    self.grid_map[center_y + i, center_x + j] = self.FREE
+        self.map_origin_x = x_init - (self.map_width * self.map_resolution) / 2
+        self.map_origin_y = y_init - (self.map_height * self.map_resolution) / 2
         
         # Log map resolution and size for debugging
         self.get_logger().info(f"Map size: {self.map_width}x{self.map_height} cells")
@@ -327,9 +318,6 @@ class MappingNode(Node):
         t.child_frame_id = "odom"
         
         # Set transform to align map with RViz2 grid
-        # This assumes your robot starts at (0,0) in the odom frame
-        # and we want that to correspond to the center of our map
-        # Shift the map frame so the robot starts at the center
         t.transform.translation.x = self.map_origin_x 
         t.transform.translation.y = self.map_origin_y 
         t.transform.translation.z = 0.0
