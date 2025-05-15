@@ -20,6 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            # formato: <script-name> = <python_module>:<function>
+            'mock_map_publisher = mock_map.mock_map_publisher:main',
         ],
     },
 )
