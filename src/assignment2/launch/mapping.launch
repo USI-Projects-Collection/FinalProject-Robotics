@@ -30,7 +30,7 @@
   -->
   <!-- <set_parameter name="use_sim_time" value="true" /> -->
   <node pkg="assignment2" exec="mapping_node" namespace="$(var name)" output='screen' />
-  <node pkg="rviz2" exec="rviz2" name="rviz2" args="-d $(find-pkg-share assignment2)/rviz/mapping_config.rviz" />
+  <!-- <node pkg="rviz2" exec="rviz2" name="rviz2" args="-d $(find-pkg-share assignment2)/rviz/mapping_config.rviz" /> -->
   <!-- <node
      pkg="assignment2"
      exec="mapping_node"
