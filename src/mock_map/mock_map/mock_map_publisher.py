@@ -11,8 +11,8 @@ class MockMapPublisher(Node):
         ox, oy    = -5.0, -5.0
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
-        # for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, -0.5, 1, 1)]:
-        for x0, y0, dx, dy in [(-2, -3, 0.5, 1)]:
+        for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, -0.5, 1, 1)]:
+        # for x0, y0, dx, dy in [(-2, -3, 0.5, 1)]:
             ix,  iy  = int((x0-ox)/res),  int((y0-oy)/res)
             ixe, iye = int((x0+dx-ox)/res), int((y0+dy-oy)/res)
             grid[iy:iye, ix:ixe] = 100                # 100 = occupato
