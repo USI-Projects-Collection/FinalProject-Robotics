@@ -1,31 +1,71 @@
+import cv2
+from cv_bridge import CvBridge
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from transforms3d._gohlketransforms import euler_from_quaternion
+import math
 
 from geometry_msgs.msg import Twist, Pose
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Range
+from sensor_msgs.msg import Image
 
 import sys
 
 class ControllerNode(Node):
     def __init__(self):
         super().__init__('controller_node')
+        self.bridge = CvBridge()
         
         # Create attributes to store odometry pose and velocity
         self.odom_pose = None
         self.odom_velocity = None
-
+                
         # Create a publisher for the topic 'cmd_vel'
         self.vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        # Create a subscriber to the topic 'odom'
+        # Create a subscriber to the topic 'odom', which will call
+        # self.odom_callback every time a message is received
         self.odom_subscriber = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
 
-        # Internal timer for controlling the movement
-        self.time_elapsed = 0.0
+        # Subscribe to the individual range sensors
+        self.front_right_range_sub = self.create_subscription(Range, '/rm0/range_1', self.scan_range1_callback, 10)
+        self.front_left_range_sub = self.create_subscription(Range, '/rm0/range_3', self.scan_range3_callback, 10)
+        self.back_right_range_sub = self.create_subscription(Range, '/rm0/range_0', self.scan_range0_callback, 10)
+        self.back_left_range_sub = self.create_subscription(Range, '/rm0/range_2', self.scan_range2_callback, 10)
 
+        self.camera_subscriber = self.create_subscription(Image, '/rm0/camera/image_color', self.camera_callback, 10)
+
+        # Add attributes to store sensor readings
+        self.range_0 = 10.0
+        self.range_1 = 10.0
+        self.range_2 = 10.0
+        self.range_3 = 10.0
+
+        self.last_camera_image = None
+
+        self.state = "approach_wall"  # Initialize robot state
+        self.look_around_start_yaw = None
+
+    def scan_range0_callback(self, msg):
+        self.range_0 = msg.range
+
+    def scan_range1_callback(self, msg):
+        self.range_1 = msg.range
+
+    def scan_range2_callback(self, msg):
+        self.range_2 = msg.range
+
+    def scan_range3_callback(self, msg):
+        self.range_3 = msg.range
+        
+    def camera_callback(self, msg):
+        # Placeholder: You can process the image here to detect the tower.
+        self.last_camera_image = msg
+        
     def start(self):
-        # Start a timer at 60 Hz
+        # Create and immediately start a timer that will regularly publish commands
         self.timer = self.create_timer(1/60, self.update_callback)
     
     def stop(self):
@@ -41,7 +81,7 @@ class ControllerNode(Node):
         
         self.get_logger().info(
             "odometry: received pose (x: {:.2f}, y: {:.2f}, theta: {:.2f})".format(*pose2d),
-            throttle_duration_sec=0.5
+             throttle_duration_sec=0.5 # Throttle logging frequency to max 2Hz
         )
     
     def pose3d_to_2d(self, pose3):
@@ -61,61 +101,90 @@ class ControllerNode(Node):
         )
         
         return pose2
+
+    def normalize_angle(self, angle):
+        """Normalize angle to be between [-pi, pi]."""
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    def check_tower_visibility(self):
+        if self.last_camera_image is None:
+            return False
+
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(self.last_camera_image, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().warn(f"Camera image conversion failed: {e}")
+            return False
+
+        # Convert BGR image to HSV color space
+        hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+
+        # Define red color range (split into two ranges in HSV)
+        lower_red1 = np.array([0, 100, 100])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([160, 100, 100])
+        upper_red2 = np.array([179, 255, 255])
+
+        # Create masks for red areas
+        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        mask = cv2.bitwise_or(mask1, mask2)
+
+        # Calculate red pixel ratio
+        red_ratio = np.sum(mask > 0) / mask.size
+
+        # Return True if red pixel ratio is above threshold
+        return red_ratio > 0.01  # adjust threshold if needed
         
     def update_callback(self):
-        # Update the elapsed time
-        self.time_elapsed += 1/60  # Timer is at 60Hz
-
         cmd_vel = Twist()
+        self.get_logger().info(f"State: {self.state}")
+        
+        if self.state == "approach_wall":
+            target_distance = 1.0
+            if self.range_1 <= target_distance or self.range_3 <= target_distance:
+                cmd_vel.linear.x = 0.0
+                self.look_around_start_yaw = self.pose3d_to_2d(self.odom_pose)[2]
+                self.state = "rotate_around_wall"
+            else:
+                cmd_vel.linear.x = 0.2
+        
+        elif self.state == "rotate_around_wall":
+            tower_visible = self.check_tower_visibility()
+            current_yaw = self.pose3d_to_2d(self.odom_pose)[2]
+            yaw_error = self.normalize_angle((self.look_around_start_yaw + math.pi / 2) - current_yaw)
 
-        cycle_duration = 20.0  # 10s forward + 10s backward
-        half_cycle = cycle_duration / 2
+            if tower_visible:
+                # Keep rotating around the wall to the left
+                cmd_vel.linear.x = 0.1
+                cmd_vel.angular.z = 0.3
+            else:
+                # Lost sight of tower, rotate right to reacquire
+                cmd_vel.linear.x = 0.0
+                cmd_vel.angular.z = -0.4
 
-        # Reset after full forward-backward cycle
-        if self.time_elapsed > cycle_duration:
-            self.time_elapsed = 0.0
-
-        # Forward or backward phase
-        forward = self.time_elapsed <= half_cycle
-
-        # Time inside current phase
-        t = self.time_elapsed if forward else self.time_elapsed - half_cycle
-
-        # Moving FORWARD phase
-        if forward:
-            if t <= 5.0:
-                cmd_vel.linear.x = 0.3
-                cmd_vel.angular.z = 0.6  # left circle
-            elif t <= 10.0:
-                cmd_vel.linear.x = 0.3
-                cmd_vel.angular.z = -0.6  # right circle
-
-        # Moving BACKWARD phase
-        else:
-            if t <= 5.0:
-                cmd_vel.linear.x = -0.3
-                cmd_vel.angular.z = 0.6  # right circle backward
-            elif t <= 10.0:
-                cmd_vel.linear.x = -0.3
-                cmd_vel.angular.z = -0.6  # left circle backward
-
+            if abs(yaw_error) < 0.1:
+                self.state = "done"
+        
+        elif self.state == "done":
+            cmd_vel.linear.x = 0.0
+            cmd_vel.angular.z = 0.0
+        
         self.vel_publisher.publish(cmd_vel)
 
 
 def main():
-    # Initialize the ROS client library
     rclpy.init(args=sys.argv)
-    
-    # Create an instance of your node class
     node = ControllerNode()
     node.start()
-    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    
-    # Ensure the RoboMaster is stopped before exiting
     node.stop()
 
 

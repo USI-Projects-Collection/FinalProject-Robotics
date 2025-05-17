@@ -28,6 +28,6 @@
        The `output` option configures the node to print to the terminal, to help with debugging.
        By default, nodes launched from a launch file print their output to a log file.
   -->
-  <set_parameter name="use_sim_time" value="true" />
+  <!-- <set_parameter name="use_sim_time" value="true" /> -->
   <node pkg="assignment2" exec="controller_node_wall" namespace="$(var name)" output='screen' />
 </launch>
