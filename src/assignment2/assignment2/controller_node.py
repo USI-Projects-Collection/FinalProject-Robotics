@@ -34,9 +34,7 @@ class ControllerNode(Node):
         self.front_left_range_sub = self.create_subscription(Range, '/rm0/range_3', self.scan_range3_callback, 10)
         self.back_right_range_sub = self.create_subscription(Range, '/rm0/range_0', self.scan_range0_callback, 10)
         self.back_left_range_sub = self.create_subscription(Range, '/rm0/range_2', self.scan_range2_callback, 10)
-
-        self.camera_subscriber = self.create_subscription(Image, '/rm0/camera/image_color', self.camera_callback, 10)
-
+        
         # Add attributes to store sensor readings
         self.range_0 = 10.0
         self.range_1 = 10.0
@@ -44,6 +42,8 @@ class ControllerNode(Node):
         self.range_3 = 10.0
 
         self.last_camera_image = None
+        # Add camera subscriber
+        self.camera_subscriber = self.create_subscription(Image, '/rm0/camera/image_color', self.camera_callback, 10)
 
         self.state = "approach_wall"  # Initialize robot state
         self.look_around_start_yaw = None
@@ -63,6 +63,7 @@ class ControllerNode(Node):
     def camera_callback(self, msg):
         # Placeholder: You can process the image here to detect the tower.
         self.last_camera_image = msg
+        self.get_logger().info("Camera image received", throttle_duration_sec=1.0)
         
     def start(self):
         # Create and immediately start a timer that will regularly publish commands
@@ -120,26 +121,26 @@ class ControllerNode(Node):
             self.get_logger().warn(f"Camera image conversion failed: {e}")
             return False
 
-        # Convert BGR image to HSV color space
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-        # Define red color range (split into two ranges in HSV)
+        avg_color = np.mean(hsv.reshape(-1, 3), axis=0)
+        self.get_logger().info(f"Average HSV seen: H={avg_color[0]:.1f}, S={avg_color[1]:.1f}, V={avg_color[2]:.1f}", throttle_duration_sec=1.0)
+
+        # Define red color range (tune this if your tower color differs)
         lower_red1 = np.array([0, 100, 100])
         upper_red1 = np.array([10, 255, 255])
         lower_red2 = np.array([160, 100, 100])
         upper_red2 = np.array([179, 255, 255])
 
-        # Create masks for red areas
         mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
         mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask = cv2.bitwise_or(mask1, mask2)
+        mask = mask1 | mask2
 
-        # Calculate red pixel ratio
         red_ratio = np.sum(mask > 0) / mask.size
+        self.get_logger().info(f"Red pixel ratio: {red_ratio:.4f}", throttle_duration_sec=1.0)
 
-        # Return True if red pixel ratio is above threshold
-        return red_ratio > 0.01  # adjust threshold if needed
-        
+        return red_ratio > 0.01  # Adjust threshold if needed
+
     def update_callback(self):
         cmd_vel = Twist()
         self.get_logger().info(f"State: {self.state}")
@@ -148,27 +149,33 @@ class ControllerNode(Node):
             target_distance = 1.0
             if self.range_1 <= target_distance or self.range_3 <= target_distance:
                 cmd_vel.linear.x = 0.0
-                self.look_around_start_yaw = self.pose3d_to_2d(self.odom_pose)[2]
+                if self.look_around_start_yaw is None:
+                    self.look_around_start_yaw = self.pose3d_to_2d(self.odom_pose)[2]
                 self.state = "rotate_around_wall"
             else:
                 cmd_vel.linear.x = 0.2
         
         elif self.state == "rotate_around_wall":
-            tower_visible = self.check_tower_visibility()
             current_yaw = self.pose3d_to_2d(self.odom_pose)[2]
             yaw_error = self.normalize_angle((self.look_around_start_yaw + math.pi / 2) - current_yaw)
+            self.get_logger().info(f"Current yaw: {current_yaw:.2f}, Yaw error: {yaw_error:.2f}", throttle_duration_sec=1.0)
 
-            if tower_visible:
-                # Keep rotating around the wall to the left
-                cmd_vel.linear.x = 0.1
-                cmd_vel.angular.z = 0.3
+            if self.look_around_start_yaw is not None:
+                if abs(yaw_error) < 1.58:
+                    self.get_logger().info(f"Yaw error: {yaw_error:.2f}")
+                    # Turn left until 90 degrees is reached
+                    cmd_vel.angular.z = 0.3
+                    cmd_vel.linear.x = 0.0
+                else:
+                    # After 90 degrees, check for tower
+                    self.get_logger().info("Reached target yaw. Checking for tower...", throttle_duration_sec=1.0)
+                    if self.check_tower_visibility():
+                        self.get_logger().info("Tower detected by camera!", throttle_duration_sec=1.0)
+                    else:
+                        self.get_logger().warn("Tower NOT detected!", throttle_duration_sec=1.0)
+                    self.state = "done"
             else:
-                # Lost sight of tower, rotate right to reacquire
-                cmd_vel.linear.x = 0.0
-                cmd_vel.angular.z = -0.4
-
-            if abs(yaw_error) < 0.1:
-                self.state = "done"
+                self.get_logger().warn("look_around_start_yaw is not set.", throttle_duration_sec=1.0)
         
         elif self.state == "done":
             cmd_vel.linear.x = 0.0
