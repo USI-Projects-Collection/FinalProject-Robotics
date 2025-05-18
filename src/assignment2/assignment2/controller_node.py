@@ -180,11 +180,16 @@ class ControllerNode(Node):
                         desired_distance = 1.0
                         distance_error = self.range_1 - desired_distance
 
-                        # Move forward and rotate left (orbit)
-                        cmd_vel.linear.x = 0.15
-                        cmd_vel.angular.z = 0.4 + 0.2 * distance_error - 0.3 * error
-
-                        self.get_logger().info(f"Offset: {error:.2f}, Distance error: {distance_error:.2f}", throttle_duration_sec=1.0)
+                        # Adjust only if tower is not centered
+                        if abs(error) > 0.05:
+                            cmd_vel.linear.x = 0.1
+                            cmd_vel.angular.z = -0.5 * error
+                            self.get_logger().info("Adjusting to center tower", throttle_duration_sec=1.0)
+                        else:
+                            # Move straight if tower is centered
+                            cmd_vel.linear.x = 0.2
+                            cmd_vel.angular.z = 0.0
+                            self.get_logger().info("Tower centered, moving forward", throttle_duration_sec=1.0)
                     else:
                         # Tower lost: rotate right to reacquire
                         cmd_vel.linear.x = 0.0
