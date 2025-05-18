@@ -174,11 +174,7 @@ class ControllerNode(Node):
                     if moments["m00"] > 0:
                         cx = int(moments["m10"] / moments["m00"])
                         width = mask.shape[1]
-                        error = (cx - width // 2) / (width // 2)
-
-                        # Use only right-side sensor to maintain distance
-                        desired_distance = 1.0
-                        distance_error = self.range_1 - desired_distance
+                        error = (cx - width // 2) / (width // 2)  # Normalize error to [-1, 1]
 
                         # Adjust only if tower is not centered
                         if abs(error) > 0.05:
