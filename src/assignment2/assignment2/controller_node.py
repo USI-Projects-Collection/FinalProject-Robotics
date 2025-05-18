@@ -156,26 +156,45 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = 0.2
         
         elif self.state == "rotate_around_wall":
-            current_yaw = self.pose3d_to_2d(self.odom_pose)[2]
-            yaw_error = self.normalize_angle((self.look_around_start_yaw + math.pi / 2) - current_yaw)
-            self.get_logger().info(f"Current yaw: {current_yaw:.2f}, Yaw error: {yaw_error:.2f}", throttle_duration_sec=1.0)
+            # Use both camera and range sensor to orbit the tower at 1m
+            if self.last_camera_image is not None:
+                try:
+                    cv_image = self.bridge.imgmsg_to_cv2(self.last_camera_image, desired_encoding='bgr8')
+                    hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-            if self.look_around_start_yaw is not None:
-                if abs(yaw_error) < 1.58:
-                    self.get_logger().info(f"Yaw error: {yaw_error:.2f}")
-                    # Turn left until 90 degrees is reached
-                    cmd_vel.angular.z = 0.3
-                    cmd_vel.linear.x = 0.0
-                else:
-                    # After 90 degrees, check for tower
-                    self.get_logger().info("Reached target yaw. Checking for tower...", throttle_duration_sec=1.0)
-                    if self.check_tower_visibility():
-                        self.get_logger().info("Tower detected by camera!", throttle_duration_sec=1.0)
+                    lower_red1 = np.array([0, 100, 100])
+                    upper_red1 = np.array([10, 255, 255])
+                    lower_red2 = np.array([160, 100, 100])
+                    upper_red2 = np.array([179, 255, 255])
+                    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+                    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+                    mask = mask1 | mask2
+
+                    moments = cv2.moments(mask)
+                    if moments["m00"] > 0:
+                        cx = int(moments["m10"] / moments["m00"])
+                        width = mask.shape[1]
+                        error = (cx - width // 2) / (width // 2)
+
+                        # Use only right-side sensor to maintain distance
+                        desired_distance = 1.0
+                        distance_error = self.range_1 - desired_distance
+
+                        # Move forward and rotate left (orbit)
+                        cmd_vel.linear.x = 0.15
+                        cmd_vel.angular.z = 0.4 + 0.2 * distance_error - 0.3 * error
+
+                        self.get_logger().info(f"Offset: {error:.2f}, Distance error: {distance_error:.2f}", throttle_duration_sec=1.0)
                     else:
-                        self.get_logger().warn("Tower NOT detected!", throttle_duration_sec=1.0)
-                    self.state = "done"
+                        # Tower lost: rotate right to reacquire
+                        cmd_vel.linear.x = 0.0
+                        cmd_vel.angular.z = -0.4
+                        self.get_logger().warn("Tower lost: rotating to reacquire.", throttle_duration_sec=1.0)
+
+                except Exception as e:
+                    self.get_logger().warn(f"Camera processing error: {e}", throttle_duration_sec=1.0)
             else:
-                self.get_logger().warn("look_around_start_yaw is not set.", throttle_duration_sec=1.0)
+                self.get_logger().warn("No camera image yet.", throttle_duration_sec=1.0)
         
         elif self.state == "done":
             cmd_vel.linear.x = 0.0
