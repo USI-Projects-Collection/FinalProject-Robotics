@@ -65,6 +65,13 @@ class ControllerNode(Node):
         # For smoothing the transitions between sensors
         self.closest_distance = 10.0
         self.active_sensor = None
+
+        self.old_tower_width = 0
+        self.min_tower_width = 0
+        self.max_tower_width = 0
+        self.is_growing_tower_width = None
+        self.check_if_growing_tower_width = 0
+        self.check_if_shrinking_tower_width = 0
         
     def scan_range0_callback(self, msg):
         self.range_0 = msg.range
@@ -147,7 +154,7 @@ class ControllerNode(Node):
         valid_sensors = []
         
         # If we have a tower in camera view, prioritize front sensors
-        tower_visible = self.check_tower_visibility()
+        tower_visible = self.check_tower_visibility(0.01)
         
         if tower_visible:
             # If tower is visible, front sensors are more reliable
@@ -175,7 +182,7 @@ class ControllerNode(Node):
             
         return self.active_sensor, self.closest_distance
     
-    def check_tower_visibility(self):
+    def check_tower_visibility(self, threshold):
         """Check if the tower is visible in the camera image."""
         if self.last_camera_image is None:
             return False
@@ -199,10 +206,23 @@ class ControllerNode(Node):
         mask = mask1 | mask2
         
         red_ratio = np.sum(mask > 0) / mask.size
-        self.get_logger().info(f"Red pixel ratio: {red_ratio:.4f}", throttle_duration_sec=1.0)
+        # self.get_logger().info(f"Red pixel ratio: {red_ratio:.4f}", throttle_duration_sec=1.0)
         
-        return red_ratio > 0.01  # Adjust threshold if needed
-        
+        return red_ratio > threshold  # Adjust threshold if needed
+    
+    def check_tower_in_view(self, color_row):
+        is_color = False
+        if color_row[0].any():
+            return False
+        for pixel in color_row:
+            if pixel.any():
+                is_color = True
+            if is_color:
+                if not pixel.any():
+                    return True
+
+        return False
+
     def get_tower_position_from_camera(self):
         """Extract the tower position from the camera image."""
         if self.last_camera_image is None:
@@ -220,6 +240,47 @@ class ControllerNode(Node):
             mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
             mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
             mask = mask1 | mask2
+
+            visualize_mask = cv2.bitwise_and(hsv, hsv, mask=mask)
+            # Show only if visualize_mask is colored
+            if visualize_mask.any():
+                cv2.imshow("Mask", visualize_mask)
+                cv2.waitKey(1)
+
+            # Get row of color to check tower witdth
+            color_row = visualize_mask[len(visualize_mask)//2]
+            self.get_logger().info(f"Color row: {color_row}", throttle_duration_sec=1.0)
+            # Get how many pixels are colored
+            colored_pixels = np.count_nonzero(color_row)
+            self.get_logger().info(f"Colored pixels: {colored_pixels}")
+            if self.check_tower_in_view(color_row):
+                if self.min_tower_width == 0:
+                    self.min_tower_width = colored_pixels
+                    self.max_tower_width = colored_pixels
+                else:
+                    if self.is_growing_tower_width is None and self.min_tower_width != 0:
+                        self.is_growing_tower_width = colored_pixels > self.old_tower_width
+                    if colored_pixels < self.min_tower_width:
+                        self.min_tower_width = colored_pixels
+                    if colored_pixels > self.max_tower_width:
+                        self.max_tower_width = colored_pixels
+                    if colored_pixels > self.old_tower_width and not self.is_growing_tower_width:
+                        self.check_if_growing_tower_width += 1
+                        if self.check_if_growing_tower_width > 10:
+                            self.check_if_growing_tower_width = 0
+                            self.is_growing_tower_width = True
+                            if colored_pixels > self.min_tower_width + 10:
+                                self.state = "shoot_tower"
+
+                    if colored_pixels < self.old_tower_width and self.is_growing_tower_width:
+                        self.check_if_shrinking_tower_width += 1
+                        if self.check_if_shrinking_tower_width > 10:
+                            self.check_if_shrinking_tower_width = 0
+                            self.is_growing_tower_width = False
+                self.old_tower_width = colored_pixels
+
+
+            self.get_logger().info(f"Tower width: {self.min_tower_width}, {self.max_tower_width}, {self.is_growing_tower_width}")
             
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
@@ -241,7 +302,7 @@ class ControllerNode(Node):
         cmd_vel = Twist()
         current_pose = self.pose3d_to_2d(self.odom_pose)
         
-        self.get_logger().info(f"State: {self.state}")
+        # self.get_logger().info(f"State: {self.state}")
         
         if self.state == "approach_wall":
             # Approach the tower until we're at approximately the target distance
@@ -249,7 +310,7 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = 0.0
                 self.orbit_start_yaw = current_pose[2]
                 self.state = "orbit_tower"
-                self.get_logger().info(f"Switching to orbit mode at distance: {min(self.range_1, self.range_3):.2f}m")
+                # self.get_logger().info(f"Switching to orbit mode at distance: {min(self.range_1, self.range_3):.2f}m")
             else:
                 # Use camera to center the tower while approaching
                 tower_position = self.get_tower_position_from_camera()
@@ -258,12 +319,12 @@ class ControllerNode(Node):
                     angular_velocity = -0.5 * tower_position
                     cmd_vel.angular.z = angular_velocity
                     cmd_vel.linear.x = 0.2
-                    self.get_logger().info(f"Approaching tower: position={tower_position:.2f}, angular_vel={angular_velocity:.2f}")
+                    # self.get_logger().info(f"Approaching tower: position={tower_position:.2f}, angular_vel={angular_velocity:.2f}")
                 else:
                     # Search for tower by rotating if not visible
                     cmd_vel.linear.x = 0.0
                     cmd_vel.angular.z = 0.3
-                    self.get_logger().info("Searching for tower")
+                    # self.get_logger().info("Searching for tower")
         
         elif self.state == "orbit_tower":
             # Get the sensor closest to the tower
@@ -321,18 +382,18 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = forward_velocity
                 cmd_vel.angular.z = angular_velocity
                 
-                self.get_logger().info(
-                    f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
-                    f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
-                    f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
-                )
+                # self.get_logger().info(
+                #     f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
+                #     f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
+                #     f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
+                # )
                 
                 # Check if we've completed a full rotation
                 current_yaw = current_pose[2]
                 angle_traveled = self.calculate_angle_traveled(self.orbit_start_yaw, current_yaw)
                 
                 if angle_traveled >= self.full_rotation_angle and self.state != "done":
-                    self.get_logger().info("Full rotation completed!")
+                    # self.get_logger().info("Full rotation completed!")
                     self.state = "done"
             else:
                 # Tower lost from view - rotate to find it
@@ -340,7 +401,7 @@ class ControllerNode(Node):
                 cmd_vel.angular.z = 0.3
                 self.get_logger().warn("Tower lost from view - searching")
         
-        elif self.state == "done":
+        elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
             self.get_logger().info("Task completed!")
