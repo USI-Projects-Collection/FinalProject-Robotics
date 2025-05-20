@@ -48,7 +48,7 @@ class ControllerNode(Node):
         self.look_around_start_yaw = None
         
         # Target distance from the tower
-        self.target_distance = 1.0
+        self.target_distance = 2.0
         
         # PID controller parameters for distance control
         self.kp_distance = 0.5
@@ -247,40 +247,40 @@ class ControllerNode(Node):
                 cv2.imshow("Mask", visualize_mask)
                 cv2.waitKey(1)
 
-            # Get row of color to check tower witdth
-            color_row = visualize_mask[len(visualize_mask)//2]
-            self.get_logger().info(f"Color row: {color_row}", throttle_duration_sec=1.0)
-            # Get how many pixels are colored
-            colored_pixels = np.count_nonzero(color_row)
-            self.get_logger().info(f"Colored pixels: {colored_pixels}")
-            if self.check_tower_in_view(color_row):
-                if self.min_tower_width == 0:
-                    self.min_tower_width = colored_pixels
-                    self.max_tower_width = colored_pixels
-                else:
-                    if self.is_growing_tower_width is None and self.min_tower_width != 0:
-                        self.is_growing_tower_width = colored_pixels > self.old_tower_width
-                    if colored_pixels < self.min_tower_width:
-                        self.min_tower_width = colored_pixels
-                    if colored_pixels > self.max_tower_width:
-                        self.max_tower_width = colored_pixels
-                    if colored_pixels > self.old_tower_width and not self.is_growing_tower_width:
-                        self.check_if_growing_tower_width += 1
-                        if self.check_if_growing_tower_width > 10:
-                            self.check_if_growing_tower_width = 0
-                            self.is_growing_tower_width = True
-                            if colored_pixels > self.min_tower_width + 10:
-                                self.state = "shoot_tower"
+            # # Get row of color to check tower witdth
+            # color_row = visualize_mask[len(visualize_mask)//2]
+            # self.get_logger().info(f"Color row: {color_row}", throttle_duration_sec=1.0)
+            # # Get how many pixels are colored
+            # colored_pixels = np.count_nonzero(color_row)
+            # self.get_logger().info(f"Colored pixels: {colored_pixels}")
+            # if self.check_tower_in_view(color_row):
+            #     if self.min_tower_width == 0:
+            #         self.min_tower_width = colored_pixels
+            #         self.max_tower_width = colored_pixels
+            #     else:
+            #         if self.is_growing_tower_width is None and self.min_tower_width != 0:
+            #             self.is_growing_tower_width = colored_pixels > self.old_tower_width
+            #         if colored_pixels < self.min_tower_width:
+            #             self.min_tower_width = colored_pixels
+            #         if colored_pixels > self.max_tower_width:
+            #             self.max_tower_width = colored_pixels
+            #         if colored_pixels > self.old_tower_width and not self.is_growing_tower_width:
+            #             self.check_if_growing_tower_width += 1
+            #             if self.check_if_growing_tower_width > 10:
+            #                 self.check_if_growing_tower_width = 0
+            #                 self.is_growing_tower_width = True
+            #                 if colored_pixels > self.min_tower_width + 10:
+            #                     self.state = "shoot_tower"
 
-                    if colored_pixels < self.old_tower_width and self.is_growing_tower_width:
-                        self.check_if_shrinking_tower_width += 1
-                        if self.check_if_shrinking_tower_width > 10:
-                            self.check_if_shrinking_tower_width = 0
-                            self.is_growing_tower_width = False
-                self.old_tower_width = colored_pixels
+            #         if colored_pixels < self.old_tower_width and self.is_growing_tower_width:
+            #             self.check_if_shrinking_tower_width += 1
+            #             if self.check_if_shrinking_tower_width > 10:
+            #                 self.check_if_shrinking_tower_width = 0
+            #                 self.is_growing_tower_width = False
+            #     self.old_tower_width = colored_pixels
 
 
-            self.get_logger().info(f"Tower width: {self.min_tower_width}, {self.max_tower_width}, {self.is_growing_tower_width}")
+            # self.get_logger().info(f"Tower width: {self.min_tower_width}, {self.max_tower_width}, {self.is_growing_tower_width}")
             
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
@@ -352,7 +352,7 @@ class ControllerNode(Node):
                 radial_velocity = p_term + i_term + d_term
                 
                 # Limit radial velocity
-                radial_velocity = max(-0.3, min(0.3, radial_velocity))
+                radial_velocity = max(-0.2, min(0.2, radial_velocity))
                 
                 # Always use forward motion for orbiting
                 forward_velocity = 0.15  # Base forward velocity
@@ -364,7 +364,7 @@ class ControllerNode(Node):
                     forward_velocity = 0.2  # Speed up if too far
                 
                 # Base angular velocity for orbiting
-                angular_velocity = -0.3
+                angular_velocity = -0.4
                 
                 # Distance Control Through Steering
                 distance_correction = 0.5 * distance_error  # Positive when too far, negative when too close
@@ -372,8 +372,8 @@ class ControllerNode(Node):
                 # Adjust angular velocity based on tower position in camer
                 # This helps keep the tower visible during orbiting
                 # If the tower on the right side of the image (tower_position is positive), camera_correction is negative, reducing angular velocity and making the robot turn right
-                camera_correction = -0.3 * tower_position
-                
+                camera_correction = -0.4 * tower_position
+
                 # This makes the robot turn more sharply toward the tower when too far away
                 # Conversely, when too close, the correction is negative, increasing angular velocity and making the robot turn more sharply away
                 angular_velocity = angular_velocity - distance_correction + camera_correction
@@ -382,11 +382,11 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = forward_velocity
                 cmd_vel.angular.z = angular_velocity
                 
-                # self.get_logger().info(
-                #     f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
-                #     f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
-                #     f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
-                # )
+                self.get_logger().info(
+                    f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
+                    f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
+                    f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
+                )
                 
                 # Check if we've completed a full rotation
                 current_yaw = current_pose[2]
