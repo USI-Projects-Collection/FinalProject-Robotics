@@ -65,13 +65,6 @@ class ControllerNode(Node):
         # For smoothing the transitions between sensors
         self.closest_distance = 10.0
         self.active_sensor = None
-
-        self.old_tower_width = 0
-        self.min_tower_width = 0
-        self.max_tower_width = 0
-        self.is_growing_tower_width = None
-        self.check_if_growing_tower_width = 0
-        self.check_if_shrinking_tower_width = 0
         
     def scan_range0_callback(self, msg):
         self.range_0 = msg.range
@@ -101,10 +94,10 @@ class ControllerNode(Node):
         self.odom_pose = msg.pose.pose
         self.odom_velocity = msg.twist.twist
         pose2d = self.pose3d_to_2d(self.odom_pose)
-        self.get_logger().info(
-            "odometry: received pose (x: {:.2f}, y: {:.2f}, theta: {:.2f})".format(*pose2d),
-            throttle_duration_sec=0.5  # Throttle logging frequency to max 2Hz
-        )
+        # self.get_logger().info(
+        #     "odometry: received pose (x: {:.2f}, y: {:.2f}, theta: {:.2f})".format(*pose2d),
+        #     throttle_duration_sec=0.5  # Throttle logging frequency to max 2Hz
+        # )
         
     def pose3d_to_2d(self, pose3):
         quaternion = (
@@ -247,41 +240,32 @@ class ControllerNode(Node):
                 cv2.imshow("Mask", visualize_mask)
                 cv2.waitKey(1)
 
-            # # Get row of color to check tower witdth
-            # color_row = visualize_mask[len(visualize_mask)//2]
-            # self.get_logger().info(f"Color row: {color_row}", throttle_duration_sec=1.0)
-            # # Get how many pixels are colored
-            # colored_pixels = np.count_nonzero(color_row)
-            # self.get_logger().info(f"Colored pixels: {colored_pixels}")
-            # if self.check_tower_in_view(color_row):
-            #     if self.min_tower_width == 0:
-            #         self.min_tower_width = colored_pixels
-            #         self.max_tower_width = colored_pixels
-            #     else:
-            #         if self.is_growing_tower_width is None and self.min_tower_width != 0:
-            #             self.is_growing_tower_width = colored_pixels > self.old_tower_width
-            #         if colored_pixels < self.min_tower_width:
-            #             self.min_tower_width = colored_pixels
-            #         if colored_pixels > self.max_tower_width:
-            #             self.max_tower_width = colored_pixels
-            #         if colored_pixels > self.old_tower_width and not self.is_growing_tower_width:
-            #             self.check_if_growing_tower_width += 1
-            #             if self.check_if_growing_tower_width > 10:
-            #                 self.check_if_growing_tower_width = 0
-            #                 self.is_growing_tower_width = True
-            #                 if colored_pixels > self.min_tower_width + 10:
-            #                     self.state = "shoot_tower"
-
-            #         if colored_pixels < self.old_tower_width and self.is_growing_tower_width:
-            #             self.check_if_shrinking_tower_width += 1
-            #             if self.check_if_shrinking_tower_width > 10:
-            #                 self.check_if_shrinking_tower_width = 0
-            #                 self.is_growing_tower_width = False
-            #     self.old_tower_width = colored_pixels
-
-
-            # self.get_logger().info(f"Tower width: {self.min_tower_width}, {self.max_tower_width}, {self.is_growing_tower_width}")
+            # HERE - Analyze tower shape to detect if facing a complete side
+            # Find contours of the tower
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
+            if contours:
+                # Get the largest contour (the tower)
+                largest_contour = max(contours, key=cv2.contourArea)
+                
+                # Calculate bounding rectangle
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                
+                # Calculate aspect ratio (width/height)
+                aspect_ratio = w / h if h > 0 else 0
+                
+                # Log the shape metrics
+                # self.get_logger().info(
+                #     f"Tower shape: area={contour_area:.1f}, w={w}, h={h}, " +
+                #     f"aspect={aspect_ratio:.2f}, extent={extent:.2f}, solidity={solidity:.2f}",
+                #     throttle_duration_sec=0.5
+                # )
+
+                # Check if robot is facing a complete side of the tower
+                if aspect_ratio > 0.5:
+                    # Tower is facing the robot
+                    self.get_logger().info("Tower is facing the robot")
+
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
                 cx = int(moments["m10"] / moments["m00"])
@@ -382,11 +366,11 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = forward_velocity
                 cmd_vel.angular.z = angular_velocity
                 
-                self.get_logger().info(
-                    f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
-                    f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
-                    f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
-                )
+                # self.get_logger().info(
+                #     f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
+                #     f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
+                #     f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
+                # )
                 
                 # Check if we've completed a full rotation
                 current_yaw = current_pose[2]
@@ -403,7 +387,7 @@ class ControllerNode(Node):
         
         elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
-            cmd_vel.angular.z = 0.0
+            # cmd_vel.angular.z = 0.0
             self.get_logger().info("Task completed!")
         
         self.vel_publisher.publish(cmd_vel)
