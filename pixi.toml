@@ -58,7 +58,7 @@ scripts = ["install/setup.sh"]
 [activation.env]
 ROS_LOCALHOST_ONLY="1"
 
-COPPELIASIM_ROOT_DIR="/Applications/coppeliaSim.app/Contents/Resources"
+COPPELIASIM_ROOT_DIR="/Users/francescocosta/Applications/coppeliaSim.app/Contents/Resources"
 
 # CMake toolchain file to use only Pixi libraries in the build process
 CMAKE_TOOLCHAIN_FILE="$PIXI_PROJECT_ROOT/pixi-toolchain.cmake"
