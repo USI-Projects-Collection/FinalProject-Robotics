@@ -1,15 +1,11 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
-from robomaster_ros.robomaster_msgs.msg import GimbalCommand
 import sim
 import time
 
 class CoppeliaPosePublisher(Node):
     def __init__(self):
-
-        # use gimbal command to set the camera orientation
-        self.gimbal_pub = self.create_publisher(GimbalCommand, '/gimbal_command', 10)
         super().__init__('coppelia_pose_pub')
         self.publisher = self.create_publisher(PoseStamped, '/current_pos', 10)
         self.timer = self.create_timer(0.1, self.publish_pose)
