@@ -9,6 +9,9 @@ from geometry_msgs.msg import Twist, Pose
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Range
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import ChannelFloat32
+from std_msgs.msg import Bool
+import array
 import sys
 
 class ControllerNode(Node):
@@ -22,6 +25,12 @@ class ControllerNode(Node):
         
         # Create a publisher for the topic 'cmd_vel'
         self.vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+
+        # Create a publisher for gimbal control using ChannelFloat32 instead of GimbalCommand
+        self.gimbal_publisher = self.create_publisher(ChannelFloat32, '/rm0/cmd_gimbal', 10)
+        
+        # Also create a publisher for gimbal engagement
+        self.gimbal_engage_publisher = self.create_publisher(Bool, '/rm0/gimbal/engage', 10)
         
         # Create a subscriber to the topic 'odom', which will call
         # self.odom_callback every time a message is received
@@ -65,7 +74,19 @@ class ControllerNode(Node):
         # For smoothing the transitions between sensors
         self.closest_distance = 10.0
         self.active_sensor = None
+
+        # Gimbal control variables - using ChannelFloat32
+        self.gimbal_rotated = False  # Track if the gimbal has been rotated
+        self.alignment_start_time = None  # Track when we entered align_to_shoot state
+        self.gimbal_rotation_started = False  # Track if we've started the gimbal rotation
+        self.gimbal_rotation_complete = False  # Track if the gimbal rotation has completed
+        self.gimbal_rotation_duration = 2.0  # Duration to apply rotation command in seconds
         
+
+        # Define constants for ChannelFloat32 gimbal control
+        self.GIMBAL_RATE_MODE = 1.0  # Assuming 1.0 represents RATE mode
+
+
     def scan_range0_callback(self, msg):
         self.range_0 = msg.range
         
@@ -121,6 +142,40 @@ class ControllerNode(Node):
         while angle < -math.pi:
             angle += 2.0 * math.pi
         return angle
+    
+    def set_gimbal_angle(self, yaw_speed, pitch_speed):
+        """
+        Control gimbal by setting angular speeds in degrees/second using ChannelFloat32.
+        
+        Args:
+            yaw_speed: Angular speed around yaw axis in degrees/second
+            pitch_speed: Angular speed around pitch axis in degrees/second
+        """
+        # Create ChannelFloat32 message
+        gimbal_cmd = ChannelFloat32()
+        gimbal_cmd.name = "gimbal_control"
+        
+        # Structure: [mode, yaw_speed, pitch_speed]
+        # Convert degrees/second to radians/second for consistency
+        values = [
+            self.GIMBAL_RATE_MODE,  # Mode (1.0 = RATE mode)
+            float(math.radians(yaw_speed)),  # Yaw in radians/second
+            float(math.radians(pitch_speed))  # Pitch in radians/second
+        ]
+        
+        gimbal_cmd.values = array.array('f', values)
+        
+        # Publish the message
+        self.gimbal_publisher.publish(gimbal_cmd)
+        self.get_logger().info(f"Setting gimbal speeds - yaw: {yaw_speed} deg/s, pitch: {pitch_speed} deg/s")
+        
+    def engage_gimbal(self, engage=True):
+        """Engage or disengage the gimbal motors."""
+        engage_msg = Bool()
+        engage_msg.data = engage
+        self.gimbal_engage_publisher.publish(engage_msg)
+        self.get_logger().info(f"{'Engaging' if engage else 'Disengaging'} gimbal motors")
+        
         
     def get_closest_sensor_to_tower(self):
         """Determine which sensor is closest to the tower and should be used for distance control."""
@@ -253,18 +308,12 @@ class ControllerNode(Node):
                 
                 # Calculate aspect ratio (width/height)
                 aspect_ratio = w / h if h > 0 else 0
-                
-                # Log the shape metrics
-                # self.get_logger().info(
-                #     f"Tower shape: area={contour_area:.1f}, w={w}, h={h}, " +
-                #     f"aspect={aspect_ratio:.2f}, extent={extent:.2f}, solidity={solidity:.2f}",
-                #     throttle_duration_sec=0.5
-                # )
 
                 # Check if robot is facing a complete side of the tower
                 if aspect_ratio > 0.5:
                     # Tower is facing the robot
                     self.get_logger().info("Tower is facing the robot")
+                    self.state = "align_to_shoot"
 
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
@@ -371,20 +420,27 @@ class ControllerNode(Node):
                 #     f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
                 #     f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
                 # )
-                
-                # Check if we've completed a full rotation
-                current_yaw = current_pose[2]
-                angle_traveled = self.calculate_angle_traveled(self.orbit_start_yaw, current_yaw)
-                
-                if angle_traveled >= self.full_rotation_angle and self.state != "done":
-                    # self.get_logger().info("Full rotation completed!")
-                    self.state = "done"
             else:
                 # Tower lost from view - rotate to find it
                 cmd_vel.linear.x = 0.0
                 cmd_vel.angular.z = 0.3
                 self.get_logger().warn("Tower lost from view - searching")
-        
+        elif self.state == "align_to_shoot":
+            # make gimbal rotate
+            if not self.gimbal_rotation_started:
+                self.gimbal_rotation_started = True
+                self.alignment_start_time = self.get_clock().now()
+                self.engage_gimbal(True)
+                self.set_gimbal_angle(90.0, 30.0)
+                self.get_logger().info("Gimbal rotation started")
+            elif self.gimbal_rotation_started and not self.gimbal_rotation_complete:
+                elapsed_time = (self.get_clock().now() - self.alignment_start_time).nanoseconds / 1e9
+                if elapsed_time >= self.gimbal_rotation_duration:
+                    self.gimbal_rotation_complete = True
+                    self.set_gimbal_angle(0.0, 0.0)
+                    self.engage_gimbal(False)
+                    self.get_logger().info("Gimbal rotation completed")
+
         elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
             # cmd_vel.angular.z = 0.0
