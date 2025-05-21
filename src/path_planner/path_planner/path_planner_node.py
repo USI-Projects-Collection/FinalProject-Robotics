@@ -28,6 +28,21 @@ class AStarPlanner(Node):
         self.grid    = np.array(msg.data, dtype=np.int8).reshape((msg.info.height, msg.info.width))
         self.get_logger().info('Mappa ricevuta')
 
+        # Inflate obstacles to account for robot size
+        inflated_grid = np.copy(self.grid)
+        inflate_radius = int(0.3 / self.res)  # raggio di inflazione in celle (es. 30cm)
+
+        for y in range(self.grid.shape[0]):
+            for x in range(self.grid.shape[1]):
+                if self.grid[y, x] >= 50:
+                    for dy in range(-inflate_radius, inflate_radius + 1):
+                        for dx in range(-inflate_radius, inflate_radius + 1):
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < self.grid.shape[1] and 0 <= ny < self.grid.shape[0]:
+                                inflated_grid[ny, nx] = max(inflated_grid[ny, nx], 100)
+        self.grid = inflated_grid
+        self.get_logger().info('Mappa inflazionata per tener conto delle dimensioni del robot')
+
     def pose_cb(self, msg):
         self.current_pose = msg
         self.get_logger().info('Posa iniziale ricevuta')
