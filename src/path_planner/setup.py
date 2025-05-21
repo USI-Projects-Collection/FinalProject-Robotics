@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             # formato: <script-name> = <python_module>:<function>
             'path_planner_node = path_planner.path_planner_node:main',
+            'current_pos = path_planner.current_pos:main',
         ],
     },
 )
