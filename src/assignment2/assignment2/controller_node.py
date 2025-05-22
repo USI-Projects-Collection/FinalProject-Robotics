@@ -382,6 +382,12 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = 0.0
                 cmd_vel.angular.z = 0.3  # Rotate to find tower
                 self.get_logger().warn("Tower lost from camera view during orbit - searching")
+                if self.range_1 <= self.target_distance + 0.1:
+                    # Tower found again, switch to positioning for left orbit
+                    cmd_vel.linear.x = 0.0
+                    cmd_vel.angular.z = 0.0
+                    self.state = "position_for_orbit"
+                    self.get_logger().info(f"Tower found at distance: {self.range_1:.2f}m, repositioning for left orbit")
             
         elif self.state == "align_to_shoot":
             # Stop and prepare for shooting
