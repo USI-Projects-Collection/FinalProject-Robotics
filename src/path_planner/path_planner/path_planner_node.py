@@ -34,7 +34,7 @@ class AStarPlanner(Node):
         self.get_logger().info('Subscribed to /rm0/odom')
 
         self.pub_path  = self.create_publisher(Path, 'plan', 10)       # relativo: /rm0/plan
-        self.pub_cmd   = self.create_publisher(Twist, 'cmd_vel', 10)   # relativo: /rm0/cmd_vel
+        self.pub_cmd   = self.create_publisher(Twist, '/rm0/cmd_vel', 10)   # assoluto: driver robomaster
         self.pub_pos   = self.create_publisher(PoseStamped, 'current_pose', 10)         # relativo: /rm0/current_pose
 
         # Broadcaster per odom -> base_link (RViz non scarterà più i messaggi)
@@ -226,7 +226,9 @@ class AStarPlanner(Node):
     def publish_path(self, cells, frame_id):
         msg = Path()
         # save world points for path follower
-        self.path_points = [self.grid2world(c) for c in cells]
+        pts = [self.grid2world(c) for c in cells]
+        # skip the current cell (start) so we don't immediately pop it
+        self.path_points = pts[1:] if len(pts) > 1 else pts
         msg.header = Header()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = frame_id
