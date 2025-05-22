@@ -5,6 +5,8 @@ from nav_msgs.msg import OccupancyGrid, Path, Odometry
 from geometry_msgs.msg import PoseStamped, Twist
 from std_msgs.msg import Header
 from rclpy.qos import qos_profile_sensor_data
+from geometry_msgs.msg import TransformStamped
+from tf2_ros import TransformBroadcaster
 
 class AStarPlanner(Node):
     def __init__(self):
@@ -22,8 +24,11 @@ class AStarPlanner(Node):
 
         self.pub_path  = self.create_publisher(Path, 'plan', 10)       # relativo: /rm0/plan
         self.pub_cmd   = self.create_publisher(Twist, 'cmd_vel', 10)   # relativo: /rm0/cmd_vel
+        self.pub_pos   = self.create_publisher(PoseStamped, 'current_pose', 10)         # relativo: /rm0/current_pose
 
-        self.current_pose = None
+        # Broadcaster per odom -> base_link (RViz non scarterà più i messaggi)
+        self.tf_broadcaster = TransformBroadcaster(self)
+
 
     # ---------- callback ----------
     def map_cb(self, msg):
@@ -50,7 +55,24 @@ class AStarPlanner(Node):
     def odom_cb(self, msg):
         # msg is nav_msgs/Odometry
         self.current_pose = msg.pose.pose
-        self.get_logger().info('Odometria ricevuta')
+        # pubblica trasformazione rm0/odom -> rm0/base_link
+        tf_msg = TransformStamped()
+        tf_msg.header.stamp = msg.header.stamp
+        tf_msg.header.frame_id = 'rm0/odom'
+        tf_msg.child_frame_id = 'rm0/base_link'
+        tf_msg.transform.translation.x = self.current_pose.position.x
+        tf_msg.transform.translation.y = self.current_pose.position.y
+        tf_msg.transform.translation.z = self.current_pose.position.z
+        tf_msg.transform.rotation = self.current_pose.orientation
+        self.tf_broadcaster.sendTransform(tf_msg)
+        # Pubblica la posa corrente (PoseStamped) per RViz
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()  # timestamp attuale
+        pose_msg.header.frame_id = 'map'  # RViz usa map come frame fisso
+        pose_msg.pose = self.current_pose
+        self.pub_pos.publish(pose_msg)
+        self.get_logger().info(f'Odometria ricevuta: x = {self.current_pose.position.x}, y = {self.current_pose.position.y}')
+
 
     def goal_cb(self, goal):
         if self.grid is None or self.current_pose is None:
