@@ -2,7 +2,7 @@
 import rclpy, numpy as np
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
 
 class MockMapPublisher(Node):
     def __init__(self):
@@ -32,12 +32,26 @@ class MockMapPublisher(Node):
         self.msg.info.origin.orientation.w = 1.0
         self.msg.data = grid.flatten().tolist()
 
-        self.pub   = self.create_publisher(OccupancyGrid, '/map', 1)
-        self.timer = self.create_timer(1.0, self._tick)
+        self.pub   = self.create_publisher(OccupancyGrid, '/map', 1) # mantieni in coda al massimo 1 messaggio”: se ne arriva un altro prima che il subscriber lo legga, il più vecchio viene scartato.
+        self.timer = self.create_timer(1.0, self._tick) # intervallo (in secondi) fra due chiamate consecutive della callback
+
+        # publisher to send goal pose at 10Hz
+        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 1)
+        self.goal_timer = self.create_timer(0.1, self.publish_goal)
 
     def _tick(self):
         self.msg.header.stamp = self.get_clock().now().to_msg()
         self.pub.publish(self.msg)
+
+    def publish_goal(self):
+        msg = PoseStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'map'
+        msg.pose.position.x = 3.0
+        msg.pose.position.y = 3.0
+        msg.pose.position.z = 0.0
+        msg.pose.orientation.w = 1.0
+        self.goal_pub.publish(msg)
 
 def main():
     rclpy.init()

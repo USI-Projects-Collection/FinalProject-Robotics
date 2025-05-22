@@ -20,6 +20,13 @@ class AStarPlanner(Node):
         self.goal_frame_id  = 'map'
         self.goal_threshold = 0.10   # [m] consider goal reached if within this radius
 
+        # -- path following --
+        self.path_points   = []     # list[(x, y)] in world coords
+        self.lookahead     = 0.10   # [m]
+        self.waypoint_tol  = 0.05   # [m]
+        self.max_lin       = 0.25   # [m/s]
+        self.max_ang       = 1.5    # [rad/s]
+
         self.sub_map   = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
         self.sub_goal  = self.create_subscription(PoseStamped, 'goal_pose', self.goal_cb, 10)  # relativo: /rm0/goal_pose quando in namespace
         # Odometry topic pubblicato dal driver Robomaster
@@ -33,6 +40,7 @@ class AStarPlanner(Node):
         # Broadcaster per odom -> base_link (RViz non scarterà più i messaggi)
         self.tf_broadcaster = TransformBroadcaster(self)
 
+        self.current_pose = None
 
     # ---------- callback ----------
     def map_cb(self, msg):
@@ -91,6 +99,28 @@ class AStarPlanner(Node):
                 self.goal_pose = None
         self.get_logger().info(f'Odometria ricevuta: x = {self.current_pose.position.x}, y = {self.current_pose.position.y}')
 
+        # ----- follow current path -----
+        if self.path_points:
+            target_x, target_y = self.path_points[0]
+            dx = target_x - self.current_pose.position.x
+            dy = target_y - self.current_pose.position.y
+            dist = math.hypot(dx, dy)
+            if dist < self.waypoint_tol:
+                # reached waypoint
+                self.path_points.pop(0)
+                if not self.path_points:
+                    self.pub_cmd.publish(Twist())  # stop
+                    self.get_logger().info('Arrivato al goal – stop movimento')
+            else:
+                ref_yaw = math.atan2(dy, dx)
+                cur_yaw = self._quat2yaw(self.current_pose.orientation)
+                err_yaw = math.atan2(math.sin(ref_yaw - cur_yaw), math.cos(ref_yaw - cur_yaw))
+                cmd = Twist()
+                # simple P controller
+                cmd.linear.x  = min(self.max_lin, 0.8 * dist)
+                cmd.angular.z = max(-self.max_ang, min(self.max_ang, 3.0 * err_yaw))
+                self.pub_cmd.publish(cmd)
+
 
     def goal_cb(self, goal):
         # save goal for continuous replanning
@@ -104,6 +134,7 @@ class AStarPlanner(Node):
         path  = self.astar(start, g)
         path = self._prune_path(path)
         self.publish_path(path, goal.header.frame_id)
+        self.get_logger().info(f'Goal ricevuto: x = {goal.pose.position.x}, y = {goal.pose.position.y}')
 
     # ---------- util ----------
     def world2grid(self, pos):
@@ -186,8 +217,16 @@ class AStarPlanner(Node):
         pruned.append(cells[-1])
         return pruned
 
+    def _quat2yaw(self, q):
+        """Return yaw (Z‑axis rotation) from geometry_msgs/Quaternion without external libs."""
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        return math.atan2(siny_cosp, cosy_cosp)
+
     def publish_path(self, cells, frame_id):
         msg = Path()
+        # save world points for path follower
+        self.path_points = [self.grid2world(c) for c in cells]
         msg.header = Header()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = frame_id
