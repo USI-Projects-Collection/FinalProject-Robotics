@@ -1,29 +1,33 @@
 #!/usr/bin/env python3
 import rclpy, numpy as np, heapq, math
 from rclpy.node import Node
-from nav_msgs.msg import OccupancyGrid, Path
+from nav_msgs.msg import OccupancyGrid, Path, Odometry
 from geometry_msgs.msg import PoseStamped, Twist
 from std_msgs.msg import Header
+from rclpy.qos import qos_profile_sensor_data
 
 class AStarPlanner(Node):
     def __init__(self):
         super().__init__('a_star_planner')
+        # Nota: tutti i topic robot‑specifici sono relativi; lancia il nodo con --namespace <robot> (es. rm0)
         self.grid = None
         self.res  = 0.05
         self.origin = (0, 0)
 
         self.sub_map   = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
-        self.sub_goal  = self.create_subscription(PoseStamped, '/goal_pose', self.goal_cb, 10)
-        self.sub_odom  = self.create_subscription(PoseStamped, '/current_pose', self.pose_cb, 10)  # usa odom reale più avanti
+        self.sub_goal  = self.create_subscription(PoseStamped, 'goal_pose', self.goal_cb, 10)  # relativo: /rm0/goal_pose quando in namespace
+        # Odometry topic pubblicato dal driver Robomaster
+        self.sub_odom  = self.create_subscription(Odometry, '/rm0/odom', self.odom_cb, qos_profile_sensor_data)
+        self.get_logger().info('Subscribed to /rm0/odom')
 
-        self.pub_path  = self.create_publisher(Path, '/plan', 10)
-        self.pub_cmd   = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.pub_path  = self.create_publisher(Path, 'plan', 10)       # relativo: /rm0/plan
+        self.pub_cmd   = self.create_publisher(Twist, 'cmd_vel', 10)   # relativo: /rm0/cmd_vel
 
         self.current_pose = None
 
     # ---------- callback ----------
     def map_cb(self, msg):
-        self.res     = msg.info.resolution
+        self.res     = msg.info.resolution 
         self.origin  = (msg.info.origin.position.x, msg.info.origin.position.y)
         self.grid    = np.array(msg.data, dtype=np.int8).reshape((msg.info.height, msg.info.width))
         self.get_logger().info('Mappa ricevuta')
@@ -43,15 +47,16 @@ class AStarPlanner(Node):
         self.grid = inflated_grid
         self.get_logger().info('Mappa inflazionata per tener conto delle dimensioni del robot')
 
-    def pose_cb(self, msg):
-        self.current_pose = msg
-        self.get_logger().info('Posa iniziale ricevuta')
+    def odom_cb(self, msg):
+        # msg is nav_msgs/Odometry
+        self.current_pose = msg.pose.pose
+        self.get_logger().info('Odometria ricevuta')
 
     def goal_cb(self, goal):
         if self.grid is None or self.current_pose is None:
             self.get_logger().warn('Mappa o posa non pronta')
             return
-        start = self.world2grid(self.current_pose.pose.position)
+        start = self.world2grid(self.current_pose.position)
         g     = self.world2grid(goal.pose.position)
         path  = self.astar(start, g)
         path = self._prune_path(path)
