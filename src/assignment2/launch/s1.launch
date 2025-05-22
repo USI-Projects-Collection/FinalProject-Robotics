@@ -8,7 +8,7 @@
 
     <arg name="tof_0" value="true"/>
     <arg name="tof_0_parent" value="base_link"/>
-    <arg name="tof_0_xyz" value="-0.10703 -0.0996 0.13077"/>
+    <arg name="tof_0_xyz" value="0.020 -0.180 0.060"/>
     <arg name="tof_0_rpy" value="0 0 -2.79253"/>
 
     <arg name="tof_1" value="true"/>
@@ -18,7 +18,7 @@
 
     <arg name="tof_2" value="true"/>
     <arg name="tof_2_parent" value="base_link"/>
-    <arg name="tof_2_xyz" value="-0.10703 0.0996 0.13077"/>
+    <arg name="tof_2_xyz" value="0.020 0.030 0.060"/>
     <arg name="tof_2_rpy" value="0 0 2.79253"/>
 
     <arg name="tof_3" value="true"/>

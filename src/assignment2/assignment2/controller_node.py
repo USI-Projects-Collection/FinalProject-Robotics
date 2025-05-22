@@ -53,7 +53,7 @@ class ControllerNode(Node):
         # Add camera subscriber
         self.camera_subscriber = self.create_subscription(Image, '/rm0/camera/image_color', self.camera_callback, 10)
         
-        self.state = "approach_wall"  # Initialize robot state
+        self.state = "find_tower"  # Initialize robot state to find tower first
         self.look_around_start_yaw = None
         
         # Target distance from the tower
@@ -175,60 +175,6 @@ class ControllerNode(Node):
         engage_msg.data = engage
         self.gimbal_engage_publisher.publish(engage_msg)
         self.get_logger().info(f"{'Engaging' if engage else 'Disengaging'} gimbal motors")
-        
-        
-    def get_closest_sensor_to_tower(self):
-        """Determine which sensor is closest to the tower and should be used for distance control."""
-        # Get current orientation
-        if self.odom_pose is None:
-            return None, 10.0
-            
-        _, _, yaw = self.pose3d_to_2d(self.odom_pose)
-        
-        # Get all sensor readings
-        sensors = {
-            'range_0': self.range_0,  # back right
-            'range_1': self.range_1,  # front right
-            'range_2': self.range_2,  # back left
-            'range_3': self.range_3   # front left
-        }
-        
-        # Find the closest sensor
-        closest_sensor = min(sensors, key=sensors.get)
-        closest_distance = sensors[closest_sensor]
-        
-        # Check if the closest sensor is actually pointing towards the tower
-        # This is a basic check and might need refinement based on your robot's geometry
-        valid_sensors = []
-        
-        # If we have a tower in camera view, prioritize front sensors
-        tower_visible = self.check_tower_visibility(0.01)
-        
-        if tower_visible:
-            # If tower is visible, front sensors are more reliable
-            if self.range_1 < 5.0:  # front right
-                valid_sensors.append(('range_1', self.range_1))
-            if self.range_3 < 5.0:  # front left
-                valid_sensors.append(('range_3', self.range_3))
-        
-        # Add side sensors if they seem to detect something
-        if self.range_0 < 5.0:  # back right
-            valid_sensors.append(('range_0', self.range_0))
-        if self.range_2 < 5.0:  # back left
-            valid_sensors.append(('range_2', self.range_2))
-            
-        if not valid_sensors:
-            return self.active_sensor, self.closest_distance
-            
-        # Use the closest valid sensor
-        best_sensor, distance = min(valid_sensors, key=lambda x: x[1])
-        
-        # Apply some hysteresis to prevent rapid switching
-        if self.active_sensor is None or distance < self.closest_distance - 0.3:
-            self.active_sensor = best_sensor
-            self.closest_distance = distance
-            
-        return self.active_sensor, self.closest_distance
     
     def check_tower_visibility(self, threshold):
         """Check if the tower is visible in the camera image."""
@@ -295,7 +241,7 @@ class ControllerNode(Node):
                 cv2.imshow("Mask", visualize_mask)
                 cv2.waitKey(1)
 
-            # HERE - Analyze tower shape to detect if facing a complete side
+            # Analyze tower shape to detect if facing a complete side
             # Find contours of the tower
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
@@ -313,7 +259,7 @@ class ControllerNode(Node):
                 if aspect_ratio > 0.5:
                     # Tower is facing the robot
                     self.get_logger().info("Tower is facing the robot")
-                    self.state = "align_to_shoot"
+                    # self.state = "align_to_shoot"
 
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
@@ -337,96 +283,112 @@ class ControllerNode(Node):
         
         # self.get_logger().info(f"State: {self.state}")
         
-        if self.state == "approach_wall":
-            # Approach the tower until we're at approximately the target distance
-            if min(self.range_1, self.range_3) <= self.target_distance + 0.1:
+        if self.state == "find_tower":
+            # Rotate to find the tower using range_1 sensor
+            if self.range_1 <= self.target_distance + 0.1:
+                # Tower found within target distance, switch to positioning for left orbit
                 cmd_vel.linear.x = 0.0
+                cmd_vel.angular.z = 0.0
+                self.state = "position_for_orbit"
+                self.get_logger().info(f"Tower found at distance: {self.range_1:.2f}m, positioning for left orbit")
+            else:
+                # Continue rotating to find tower
+                cmd_vel.linear.x = 0.0
+                cmd_vel.angular.z = 0.5  # Rotate counterclockwise to search
+                self.get_logger().info(f"Searching for tower... range_1: {self.range_1:.2f}m")
+        
+        elif self.state == "position_for_orbit":
+            # Position the robot to start orbiting from the left side
+            # Turn left (counterclockwise) to position the tower on the right side of the robot
+            cmd_vel.linear.x = 0.0
+            cmd_vel.angular.z = 0.5  # Turn left
+            
+            # Check if the tower is now detected by the right sensor (range_0)
+            if self.range_0 <= self.target_distance + 0.5:  # Allow some tolerance for positioning
+                # Tower is now on the right side, start orbiting
                 self.orbit_start_yaw = current_pose[2]
                 self.state = "orbit_tower"
-                # self.get_logger().info(f"Switching to orbit mode at distance: {min(self.range_1, self.range_3):.2f}m")
+                self.get_logger().info(f"Positioned for orbit. Tower distance on right: {self.range_0:.2f}m")
             else:
-                # Use camera to center the tower while approaching
-                tower_position = self.get_tower_position_from_camera()
-                if tower_position is not None:
-                    # Adjust orientation to keep tower centered while approaching
-                    angular_velocity = -0.5 * tower_position
-                    cmd_vel.angular.z = angular_velocity
-                    cmd_vel.linear.x = 0.2
-                    # self.get_logger().info(f"Approaching tower: position={tower_position:.2f}, angular_vel={angular_velocity:.2f}")
-                else:
-                    # Search for tower by rotating if not visible
-                    cmd_vel.linear.x = 0.0
-                    cmd_vel.angular.z = 0.3
-                    # self.get_logger().info("Searching for tower")
-        
+                self.get_logger().info(f"Positioning... range_0: {self.range_0:.2f}m, range_1: {self.range_1:.2f}m")
+
         elif self.state == "orbit_tower":
-            # Get the sensor closest to the tower
-            active_sensor, measured_distance = self.get_closest_sensor_to_tower()
+            # Use range_0 (right sensor) to maintain distance during left-side orbit
+            measured_distance = self.range_0
             
-            # Get tower position from camera (for angular control)
+            # Get tower position from camera for centering control
             tower_position = self.get_tower_position_from_camera()
             
             if tower_position is not None:
-                # Calculate distance error
-                distance_error = measured_distance - self.target_distance # Positive error means the robot is too far away
+                # Calculate distance error using range_0
+                distance_error = measured_distance - self.target_distance  # Positive error means robot is too far away
                 
-                # ---- PID (Proportional-Integral-Derivative) controller for distance regulation ----
-                # Calculates how much the robot should adjust its position (radially) to maintain the target 1-meter distance from the tower
-
-                # Proportional Term -> adjustment proportional to the current error
+                # PID controller for distance regulation using range_0
                 p_term = self.kp_distance * distance_error 
-                # Accumulate error over time -> If the robot consistently stays slightly off target, this gradually increases correction
                 self.distance_error_sum += distance_error 
                 i_term = self.ki_distance * self.distance_error_sum
-                # Derivative Term -> adjustment based on the rate of change of the error 
                 d_term = self.kd_distance * (distance_error - self.last_distance_error)
                 self.last_distance_error = distance_error
                 
-                radial_velocity = p_term + i_term + d_term
+                # Calculate distance control output
+                distance_control = p_term + i_term + d_term
                 
-                # Limit radial velocity
-                radial_velocity = max(-0.2, min(0.2, radial_velocity))
+                # Base velocities for left-side orbiting (counterclockwise around tower)
+                base_linear_velocity = 0.15   # Forward motion
+                base_angular_velocity = -0.4   # Positive angular velocity for counterclockwise rotation
                 
-                # Always use forward motion for orbiting
-                forward_velocity = 0.15  # Base forward velocity
+                # Distance Control: Adjust angular velocity based on distance error from range_0
+                # If too far (positive error), turn more sharply toward tower (reduce angular velocity)
+                # If too close (negative error), turn away from tower (increase angular velocity)
+                distance_angular_correction = -distance_control * 0.3
                 
-                # Adjust forward velocity slightly based on distance (slow down if too close)
-                if measured_distance < self.target_distance - 0.1:
-                    forward_velocity = 0.1  # Slow down if too close
-                elif measured_distance > self.target_distance + 0.1:
-                    forward_velocity = 0.2  # Speed up if too far
+                # Camera Control: Adjust angular velocity to keep tower centered
+                # tower_position: negative = tower on left side of image, positive = tower on right side
+                # If tower is on right side (positive), reduce angular velocity to turn right toward tower
+                # If tower is on left side (negative), increase angular velocity to turn left toward tower
+                camera_angular_correction = -tower_position * 0.5
                 
-                # Base angular velocity for orbiting
-                angular_velocity = -0.4
+                # Combine both controls
+                angular_velocity = base_angular_velocity + distance_angular_correction + camera_angular_correction
                 
-                # Distance Control Through Steering
-                distance_correction = 0.5 * distance_error  # Positive when too far, negative when too close
+                # Linear velocity adjustment based on distance error
+                linear_velocity = base_linear_velocity
+                if distance_error > 0.2:  # Too far
+                    linear_velocity = base_linear_velocity * 0.8  # Slow down to allow closer approach
+                elif distance_error < -0.2:  # Too close
+                    linear_velocity = base_linear_velocity * 1.2  # Speed up to move away
                 
-                # Adjust angular velocity based on tower position in camer
-                # This helps keep the tower visible during orbiting
-                # If the tower on the right side of the image (tower_position is positive), camera_correction is negative, reducing angular velocity and making the robot turn right
-                camera_correction = -0.4 * tower_position
-
-                # This makes the robot turn more sharply toward the tower when too far away
-                # Conversely, when too close, the correction is negative, increasing angular velocity and making the robot turn more sharply away
-                angular_velocity = angular_velocity - distance_correction + camera_correction
+                # Apply velocity limits
+                linear_velocity = max(0.05, min(0.3, linear_velocity))
+                angular_velocity = min(-0.1, angular_velocity)
                 
-                # Convert to robot-centric velocities - always move forward
-                cmd_vel.linear.x = forward_velocity
+                cmd_vel.linear.x = linear_velocity
                 cmd_vel.angular.z = angular_velocity
                 
-                # self.get_logger().info(
-                #     f"Orbiting: sensor={active_sensor}, dist={measured_distance:.2f}m, " +
-                #     f"error={distance_error:.2f}m, radial_v={radial_velocity:.2f}, " +
-                #     f"angular_v={angular_velocity:.2f}, cam_pos={tower_position:.2f}"
-                # )
+                # Check if we've completed a full orbit
+                # if self.orbit_start_yaw is not None:
+                #     angle_traveled = self.calculate_angle_traveled(self.orbit_start_yaw, current_pose[2])
+                #     if angle_traveled >= self.full_rotation_angle * 0.95:  # 95% of full rotation to account for noise
+                #         self.state = "align_to_shoot"
+                #         self.get_logger().info("Orbit completed, switching to align_to_shoot")
+                
+                self.get_logger().info(
+                    f"Orbiting (left): range_0={measured_distance:.2f}m, " +
+                    f"dist_error={distance_error:.2f}m, tower_pos={tower_position:.2f}, " +
+                    f"lin_v={linear_velocity:.2f}, ang_v={angular_velocity:.2f}"
+                )
             else:
-                # Tower lost from view - rotate to find it
+                # Tower lost from camera view - prioritize finding it again
                 cmd_vel.linear.x = 0.0
-                cmd_vel.angular.z = 0.3
-                self.get_logger().warn("Tower lost from view - searching")
+                cmd_vel.angular.z = 0.3  # Rotate to find tower
+                self.get_logger().warn("Tower lost from camera view during orbit - searching")
+            
         elif self.state == "align_to_shoot":
-            # make gimbal rotate
+            # Stop and prepare for shooting
+            cmd_vel.linear.x = 0.0
+            cmd_vel.angular.z = 0.0
+            
+            # Make gimbal rotate
             if not self.gimbal_rotation_started:
                 self.gimbal_rotation_started = True
                 self.alignment_start_time = self.get_clock().now()
@@ -439,11 +401,12 @@ class ControllerNode(Node):
                     self.gimbal_rotation_complete = True
                     self.set_gimbal_angle(0.0, 0.0)
                     self.engage_gimbal(False)
+                    self.state = "shoot_tower"
                     self.get_logger().info("Gimbal rotation completed")
 
         elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
-            # cmd_vel.angular.z = 0.0
+            cmd_vel.angular.z = 0.0
             self.get_logger().info("Task completed!")
         
         self.vel_publisher.publish(cmd_vel)
@@ -457,7 +420,7 @@ class ControllerNode(Node):
         # Calculate difference
         diff = current_angle - start_angle
         
-        # Handle wrap-around
+        # Handle wrap-around for counterclockwise motion
         if diff < 0:
             diff += 2 * math.pi
             
