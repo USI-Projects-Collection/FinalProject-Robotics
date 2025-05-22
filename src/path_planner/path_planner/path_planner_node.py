@@ -15,6 +15,10 @@ class AStarPlanner(Node):
         self.grid = None
         self.res  = 0.05
         self.origin = (0, 0)
+        # -- goal tracking for continuous replanning --
+        self.goal_pose      = None   # geometry_msgs/Point of current goal
+        self.goal_frame_id  = 'map'
+        self.goal_threshold = 0.10   # [m] consider goal reached if within this radius
 
         self.sub_map   = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
         self.sub_goal  = self.create_subscription(PoseStamped, 'goal_pose', self.goal_cb, 10)  # relativo: /rm0/goal_pose quando in namespace
@@ -71,10 +75,27 @@ class AStarPlanner(Node):
         pose_msg.header.frame_id = 'map'  # RViz usa map come frame fisso
         pose_msg.pose = self.current_pose
         self.pub_pos.publish(pose_msg)
+        # ----- continuous replanning toward goal -----
+        if self.goal_pose is not None and self.grid is not None:
+            dx = self.goal_pose.x - self.current_pose.position.x
+            dy = self.goal_pose.y - self.current_pose.position.y
+            dist = math.hypot(dx, dy)
+            if dist > self.goal_threshold:
+                start = self.world2grid(self.current_pose.position)
+                g     = self.world2grid(self.goal_pose)
+                path  = self.astar(start, g)
+                path  = self._prune_path(path)
+                self.publish_path(path, self.goal_frame_id)
+            else:
+                self.get_logger().info('Goal pose raggiunto — smetto di ripianificare')
+                self.goal_pose = None
         self.get_logger().info(f'Odometria ricevuta: x = {self.current_pose.position.x}, y = {self.current_pose.position.y}')
 
 
     def goal_cb(self, goal):
+        # save goal for continuous replanning
+        self.goal_pose     = goal.pose.position
+        self.goal_frame_id = goal.header.frame_id
         if self.grid is None or self.current_pose is None:
             self.get_logger().warn('Mappa o posa non pronta')
             return
