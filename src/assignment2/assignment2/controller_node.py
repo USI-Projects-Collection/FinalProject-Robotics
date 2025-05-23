@@ -58,6 +58,8 @@ class ControllerNode(Node):
         
         # Target distance from the tower
         self.target_distance = 2.0
+        self.obstacle_target_distance = 0.2
+        self.has_almost_avoided_obstacle = False
         
         # PID controller parameters for distance control
         self.kp_distance = 0.5
@@ -273,6 +275,59 @@ class ControllerNode(Node):
             self.get_logger().warn(f"Camera processing error: {e}", throttle_duration_sec=1.0)
             
         return None
+    
+    def orbit_around_tower(self, cmd_vel, tower_position, measured_distance):
+        """Orbit around the tower using range_0 sensor and the camera."""
+        # Calculate distance error using range_0
+        distance_error = measured_distance - self.target_distance  # Positive error means robot is too far away
+
+        # PID controller for distance regulation using range_0
+        p_term = self.kp_distance * distance_error 
+        self.distance_error_sum += distance_error 
+        i_term = self.ki_distance * self.distance_error_sum
+        d_term = self.kd_distance * (distance_error - self.last_distance_error)
+        self.last_distance_error = distance_error
+        
+        # Calculate distance control output
+        distance_control = p_term + i_term + d_term
+        
+        # Base velocities for left-side orbiting (counterclockwise around tower)
+        base_linear_velocity = 0.15   # Forward motion
+        base_angular_velocity = -0.4   # Positive angular velocity for counterclockwise rotation
+        
+        # Distance Control: Adjust angular velocity based on distance error from range_0
+        # If too far (positive error), turn more sharply toward tower (reduce angular velocity)
+        # If too close (negative error), turn away from tower (increase angular velocity)
+        distance_angular_correction = -distance_control * 0.3
+        
+        # Camera Control: Adjust angular velocity to keep tower centered
+        # tower_position: negative = tower on left side of image, positive = tower on right side
+        # If tower is on right side (positive), reduce angular velocity to turn right toward tower
+        # If tower is on left side (negative), increase angular velocity to turn left toward tower
+        camera_angular_correction = -tower_position * 0.5
+        
+        # Combine both controls
+        angular_velocity = base_angular_velocity + distance_angular_correction + camera_angular_correction
+        
+        # Linear velocity adjustment based on distance error
+        linear_velocity = base_linear_velocity
+        if distance_error > 0.2:  # Too far
+            linear_velocity = base_linear_velocity * 0.8  # Slow down to allow closer approach
+        elif distance_error < -0.2:  # Too close
+            linear_velocity = base_linear_velocity * 1.2  # Speed up to move away
+        
+        # Apply velocity limits
+        linear_velocity = max(0.05, min(0.3, linear_velocity))
+        angular_velocity = min(-0.1, angular_velocity)
+        
+        cmd_vel.linear.x = linear_velocity
+        cmd_vel.angular.z = angular_velocity
+
+        self.get_logger().info(
+            f"Orbiting (left): range_0={measured_distance:.2f}m, " +
+            f"dist_error={distance_error:.2f}m, tower_pos={tower_position:.2f}, " +
+            f"lin_v={linear_velocity:.2f}, ang_v={angular_velocity:.2f}"
+        )
         
     def update_callback(self):
         if self.odom_pose is None:
@@ -313,70 +368,19 @@ class ControllerNode(Node):
                 self.get_logger().info(f"Positioning... range_0: {self.range_0:.2f}m, range_1: {self.range_1:.2f}m")
 
         elif self.state == "orbit_tower":
+            # Avoid other towers during the orbit
+            if self.range_1 <= self.obstacle_target_distance:
+                self.get_logger().warn("Obstacle detected in front - stopping orbit")
+                self.state = "avoid_obstacle"
+
             # Use range_0 (right sensor) to maintain distance during left-side orbit
             measured_distance = self.range_0
-            
+
             # Get tower position from camera for centering control
             tower_position = self.get_tower_position_from_camera()
-            
+
             if tower_position is not None:
-                # Calculate distance error using range_0
-                distance_error = measured_distance - self.target_distance  # Positive error means robot is too far away
-                
-                # PID controller for distance regulation using range_0
-                p_term = self.kp_distance * distance_error 
-                self.distance_error_sum += distance_error 
-                i_term = self.ki_distance * self.distance_error_sum
-                d_term = self.kd_distance * (distance_error - self.last_distance_error)
-                self.last_distance_error = distance_error
-                
-                # Calculate distance control output
-                distance_control = p_term + i_term + d_term
-                
-                # Base velocities for left-side orbiting (counterclockwise around tower)
-                base_linear_velocity = 0.15   # Forward motion
-                base_angular_velocity = -0.4   # Positive angular velocity for counterclockwise rotation
-                
-                # Distance Control: Adjust angular velocity based on distance error from range_0
-                # If too far (positive error), turn more sharply toward tower (reduce angular velocity)
-                # If too close (negative error), turn away from tower (increase angular velocity)
-                distance_angular_correction = -distance_control * 0.3
-                
-                # Camera Control: Adjust angular velocity to keep tower centered
-                # tower_position: negative = tower on left side of image, positive = tower on right side
-                # If tower is on right side (positive), reduce angular velocity to turn right toward tower
-                # If tower is on left side (negative), increase angular velocity to turn left toward tower
-                camera_angular_correction = -tower_position * 0.5
-                
-                # Combine both controls
-                angular_velocity = base_angular_velocity + distance_angular_correction + camera_angular_correction
-                
-                # Linear velocity adjustment based on distance error
-                linear_velocity = base_linear_velocity
-                if distance_error > 0.2:  # Too far
-                    linear_velocity = base_linear_velocity * 0.8  # Slow down to allow closer approach
-                elif distance_error < -0.2:  # Too close
-                    linear_velocity = base_linear_velocity * 1.2  # Speed up to move away
-                
-                # Apply velocity limits
-                linear_velocity = max(0.05, min(0.3, linear_velocity))
-                angular_velocity = min(-0.1, angular_velocity)
-                
-                cmd_vel.linear.x = linear_velocity
-                cmd_vel.angular.z = angular_velocity
-                
-                # Check if we've completed a full orbit
-                # if self.orbit_start_yaw is not None:
-                #     angle_traveled = self.calculate_angle_traveled(self.orbit_start_yaw, current_pose[2])
-                #     if angle_traveled >= self.full_rotation_angle * 0.95:  # 95% of full rotation to account for noise
-                #         self.state = "align_to_shoot"
-                #         self.get_logger().info("Orbit completed, switching to align_to_shoot")
-                
-                self.get_logger().info(
-                    f"Orbiting (left): range_0={measured_distance:.2f}m, " +
-                    f"dist_error={distance_error:.2f}m, tower_pos={tower_position:.2f}, " +
-                    f"lin_v={linear_velocity:.2f}, ang_v={angular_velocity:.2f}"
-                )
+                self.orbit_around_tower(cmd_vel, tower_position, measured_distance)
             else:
                 # Tower lost from camera view - prioritize finding it again
                 cmd_vel.linear.x = 0.0
@@ -388,6 +392,67 @@ class ControllerNode(Node):
                     cmd_vel.angular.z = 0.0
                     self.state = "position_for_orbit"
                     self.get_logger().info(f"Tower found at distance: {self.range_1:.2f}m, repositioning for left orbit")
+
+        elif self.state == "avoid_obstacle":
+            # Obstacle avoidance state: orbit around the obstacle while checking for original tower
+            cmd_vel.linear.x = 0.0
+            cmd_vel.angular.z = -0.5  # Turn right
+
+            measured_distance_avoiding = self.range_2
+            distance_error_sum = 0.0
+            last_distance_error = 0.0
+            
+            if self.range_2 <= 0.2:
+                if self.range_0 < 10:
+                    self.has_almost_avoided_obstacle = True
+                elif self.range_0 >= 10 and self.has_almost_avoided_obstacle:
+                    self.get_logger().info("Obstacle avoided, resuming orbit")
+                    self.state = "orbit_tower"
+                    self.has_almost_avoided_obstacle = False
+                # Calculate distance error using range_3
+                distance_error = measured_distance_avoiding - self.obstacle_target_distance
+                
+                # PID controller for distance regulation using range_3
+                p_term = 0.1 * distance_error
+                distance_error_sum += distance_error
+                i_term = 0.0 * distance_error_sum
+                d_term = 0.1 * (distance_error - last_distance_error)
+                last_distance_error = distance_error
+
+                # Calculate distance control output
+                distance_control = p_term + i_term + d_term
+                
+                # Base velocities for left-side orbiting (counterclockwise around tower)
+                base_linear_velocity = 0.15   # Forward motion
+                base_angular_velocity = 0.4   # Positive angular velocity for counterclockwise rotation
+                
+                # Distance Control: Adjust angular velocity based on distance error from range_0
+                # If too far (positive error), turn more sharply toward tower (reduce angular velocity)
+                # If too close (negative error), turn away from tower (increase angular velocity)
+                distance_angular_correction = distance_control * 0.3
+
+                # Combine both controls
+                angular_velocity = base_angular_velocity + distance_angular_correction
+                
+                # Linear velocity adjustment based on distance error
+                linear_velocity = base_linear_velocity
+                if distance_error > 0.3:  # Too far
+                    linear_velocity = base_linear_velocity * 0.8  # Slow down to allow closer approach
+                elif distance_error < 0:  # Too close
+                    linear_velocity = base_linear_velocity * 1.2  # Speed up to move away
+                
+                # Apply velocity limits
+                linear_velocity = max(0.05, min(0.3, linear_velocity))
+                angular_velocity = max(0.1, angular_velocity)
+                
+                cmd_vel.linear.x = linear_velocity
+                cmd_vel.angular.z = angular_velocity
+
+                self.get_logger().info(
+                    f"Avoiding obstacle: range_3={measured_distance_avoiding:.2f}m, " +
+                    f"dist_error={distance_error:.2f}m, " +
+                    f"lin_v={linear_velocity:.2f}, ang_v={angular_velocity:.2f}"
+                )
             
         elif self.state == "align_to_shoot":
             # Stop and prepare for shooting
