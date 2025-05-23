@@ -8,7 +8,7 @@ from geometry_msgs.msg import Twist
 class MockMapPublisher(Node):
     def __init__(self):
         super().__init__('mock_map_publisher')
-        res, w, h = 0.05, 100, 100         # 10 m × 10 m, 5 cm/cella
+        res, w, h = 0.1, 200, 200         # 10 m × 10 m, 5 cm/cella
         ox, oy    = -2.5, -2.5
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
@@ -40,7 +40,8 @@ class MockMapPublisher(Node):
 
         self.pub_cmd   = self.create_subscription(Twist, '/rm0/cmd_vel', self._cmd_callback, 1)
         self.cmd_vel = None
-
+        self.current_tower = 0
+        self.flag = False
 
 
         # publisher to send goal pose at 10Hz
@@ -54,18 +55,24 @@ class MockMapPublisher(Node):
     def _cmd_callback(self, msg):
         self.cmd_vel = msg
         self.get_logger().info(f"Received cmd_vel: {msg.linear.x}, {msg.angular.z}")
+        if self.cmd_vel.linear.x is None and self.current_tower < len(self.tower_goals) and not self.flag:
+            self.flag = True
+            self.current_tower += 1
+        else:
+            self.flag = False
+            
+        self.get_logger().info(f"Received cmd_vel: {msg.linear.x}, {msg.angular.z}")
 
 
     def publish_goal(self):
-        for tower in self.tower_goals:
-            msg = PoseStamped()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'map'
-            msg.pose.position.x = 1.3
-            msg.pose.position.y = -1.3
-            msg.pose.position.z = 0.0
-            msg.pose.orientation.w = 1.0
-            self.goal_pub.publish(msg)
+        msg = PoseStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'map'
+        msg.pose.position.x = self.tower_goals[self.current_tower][0]
+        msg.pose.position.y = self.tower_goals[self.current_tower][1]
+        msg.pose.position.z = 0.0
+        msg.pose.orientation.w = 1.0
+        self.goal_pub.publish(msg)
 
 def main():
     rclpy.init()

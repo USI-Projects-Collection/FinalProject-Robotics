@@ -18,7 +18,7 @@ class AStarPlanner(Node):
         # -- goal tracking for continuous replanning --
         self.goal_pose      = None   # geometry_msgs/Point of current goal
         self.goal_frame_id  = 'map'
-        self.goal_threshold = 0.10   # [m] consider goal reached if within this radius
+        self.goal_threshold = 0.5  # [m] consider goal reached if within this radius
 
         # -- path following --
         self.path_points   = []     # list[(x, y)] in world coords
