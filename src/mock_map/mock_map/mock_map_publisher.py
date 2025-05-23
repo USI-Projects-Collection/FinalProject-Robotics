@@ -8,8 +8,8 @@ from geometry_msgs.msg import Twist
 class MockMapPublisher(Node):
     def __init__(self):
         super().__init__('mock_map_publisher')
-        res, w, h = 0.05, 200, 200         # 10 m × 10 m, 5 cm/cella
-        ox, oy    = -5.0, -5.0
+        res, w, h = 0.05, 100, 100         # 10 m × 10 m, 5 cm/cella
+        ox, oy    = -2.5, -2.5
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
         # for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, 2, 1, 1)]:
