@@ -15,8 +15,8 @@ class MockMapPublisher(Node):
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
         # for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, 2, 1, 1)]:
-        # self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
-        self.tower_goals = [(1.3, -1.3, 0.15, 0.25)]
+        self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
+        # self.tower_goals = [(1.3, -1.3, 0.15, 0.25)]
         for x0, y0, dx, dy in self.tower_goals:
         # for x0, y0, dx, dy in [(-2, -3, 0.5, 1)]:
             ix,  iy  = int((x0-ox)/res),  int((y0-oy)/res)
@@ -43,7 +43,7 @@ class MockMapPublisher(Node):
 
         self.pub_cmd   = self.create_subscription(Twist, '/rm0/cmd_vel', self._cmd_callback, 1)
         self.cmd_vel = None
-        self.current_tower = 0
+        self.current_tower = 1
         self.flag = False
 
 
@@ -51,9 +51,9 @@ class MockMapPublisher(Node):
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 1)
         self.goal_timer = self.create_timer(2, self.publish_goal)
         self.go_again = True
-        self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 10)
+        self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 1)
         self.goal_reached = False
-        self.sub_goal_reached = self.create_subscription(Bool, '/goal_reached', self._goal_reached_cb, 10)
+        self.sub_goal_reached = self.create_subscription(Bool, '/goal_reached', self._goal_reached_cb, 1)
     
     def _goal_reached_cb(self, msg):
         if msg.data:

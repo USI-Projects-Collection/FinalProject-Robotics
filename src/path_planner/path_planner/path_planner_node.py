@@ -38,9 +38,9 @@ class PathPlannerNode(Node):
         self.pub_cmd   = self.create_publisher(Twist, '/rm0/cmd_vel', 10)   # assoluto: driver robomaster
         self.pub_pos   = self.create_publisher(PoseStamped, 'current_pose', 10)         # relativo: /rm0/current_pose
         
-        self.pub_goal_reached = self.create_publisher(Bool, '/goal_reached', 10)
+        self.pub_goal_reached = self.create_publisher(Bool, '/goal_reached', 1)
         self.go_again = True
-        self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 10)
+        self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 1)
 
         # Broadcaster per odom -> base_link (RViz non scarterà più i messaggi)
         self.tf_broadcaster = TransformBroadcaster(self)

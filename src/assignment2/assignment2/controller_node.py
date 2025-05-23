@@ -27,7 +27,7 @@ class ControllerNode(Node):
         self.bridge = CvBridge()
 
         self.goal_reached = False
-        self.sub_goal_reached = self.create_subscription(Bool, '/goal_reached', self._goal_reached_cb, 10)
+        self.sub_goal_reached = self.create_subscription(Bool, '/goal_reached', self._goal_reached_cb, 1)
 
         self.turn_ended = self.create_publisher(Bool, '/go_again', 10)
 
@@ -289,50 +289,50 @@ class ControllerNode(Node):
             # METHOD 1
             # Analyze tower shape to detect if facing a complete side
             # Find contours of the tower
-            # contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            # max_row, width_color = self.get_maximum_width(visualize_mask)
-            # if contours:
-            #     # Get the largest contour (the tower)
-            #     largest_contour = max(contours, key=cv2.contourArea)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            max_row, width_color = self.get_maximum_width(visualize_mask)
+            if contours:
+                # Get the largest contour (the tower)
+                largest_contour = max(contours, key=cv2.contourArea)
                 
-            #     # Calculate bounding rectangle
-            #     x, y, w, h = cv2.boundingRect(largest_contour)
+                # Calculate bounding rectangle
+                x, y, w, h = cv2.boundingRect(largest_contour)
                 
-            #     # Calculate aspect ratio (width/height)
-            #     aspect_ratio = w / h if h > 0 else 0
+                # Calculate aspect ratio (width/height)
+                aspect_ratio = w / h if h > 0 else 0
 
-            #     # Check if robot is facing a complete side of the tower
-            #     if aspect_ratio > 0.5:
-            #         # Tower is facing the robot
-            #         self.get_logger().info("Tower is facing the robot")
-            #         self.state = "align_tower"
+                # Check if robot is facing a complete side of the tower
+                if aspect_ratio > 0.5:
+                    # Tower is facing the robot
+                    self.get_logger().info("Tower is facing the robot")
+                    self.state = "align_tower"
             
             # METHOD 2
-            max_row, width_color = self.get_maximum_width(visualize_mask)
-            if self.check_tower_in_view(max_row):
-                if width_color < self.min_tower_width:
-                    self.min_tower_width = width_color 
-                np.set_printoptions(threshold=np.inf)
-                # self.get_logger().info(f"{visualize_mask[0]}")
-                for i in range(visualize_mask.shape[0]-1, -1, -1):
-                    row = visualize_mask[i]
-                    # self.get_logger().info(f"{row}")
-                    row_color = 0
-                    if any(itertools.chain(*row)):
-                        for pixel in row:
-                            if any(pixel):
-                                row_color += 1
-                        # self.get_logger().info(f'row color: {row_color}, width color: {width_color}')
-                        # self.get_logger().info(f"row color: {row_color}, max width: {width_color}")
-                        if row_color >= width_color-5 and row_color <= width_color+5 and width_color > self.min_tower_width + 20:
-                            self.state = "align_tower"
-                            self.get_logger().info(f"min width: {self.min_tower_width}, width current: {width_color}")
-                            # You may want to return True here or set a flag
-                            break
-                        else:
-                            break
-                    else:
-                        continue
+            # max_row, width_color = self.get_maximum_width(visualize_mask)
+            # if self.check_tower_in_view(max_row):
+            #     if width_color < self.min_tower_width:
+            #         self.min_tower_width = width_color 
+            #     np.set_printoptions(threshold=np.inf)
+            #     # self.get_logger().info(f"{visualize_mask[0]}")
+            #     for i in range(visualize_mask.shape[0]-1, -1, -1):
+            #         row = visualize_mask[i]
+            #         # self.get_logger().info(f"{row}")
+            #         row_color = 0
+            #         if any(itertools.chain(*row)):
+            #             for pixel in row:
+            #                 if any(pixel):
+            #                     row_color += 1
+            #             # self.get_logger().info(f'row color: {row_color}, width color: {width_color}')
+            #             # self.get_logger().info(f"row color: {row_color}, max width: {width_color}")
+            #             if row_color >= width_color-5 and row_color <= width_color+5 and width_color > self.min_tower_width + 20:
+            #                 self.state = "align_tower"
+            #                 self.get_logger().info(f"min width: {self.min_tower_width}, width current: {width_color}")
+            #                 # You may want to return True here or set a flag
+            #                 break
+            #             else:
+            #                 break
+            #         else:
+            #             continue
 
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
@@ -582,6 +582,7 @@ class ControllerNode(Node):
             self.shoot_projectile(projectile_pos, velocity)
             self.goal_reached = False
             self.turn_ended.publish(Bool(data=True))
+            self.state = "find_tower"
             self.get_logger().info("Task completed!")
 
         elif self.state == "align_to_shoot":
