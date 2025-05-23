@@ -57,7 +57,7 @@ class ControllerNode(Node):
         self.look_around_start_yaw = None
         
         # Target distance from the tower
-        self.target_distance = 2.0
+        self.target_distance = 1.0
         self.obstacle_target_distance = 0.2
         self.has_almost_avoided_obstacle = False
         
@@ -277,6 +277,10 @@ class ControllerNode(Node):
         return None
     
     def orbit_around_tower(self, cmd_vel, tower_position, measured_distance):
+        if self.range_3 <= 0.2:
+            self.get_logger().info("Obstacle detected in front - stopping orbit")
+            self.state = "avoid_obstacle"
+            return
         """Orbit around the tower using range_0 sensor and the camera."""
         # Calculate distance error using range_0
         distance_error = measured_distance - self.target_distance  # Positive error means robot is too far away
