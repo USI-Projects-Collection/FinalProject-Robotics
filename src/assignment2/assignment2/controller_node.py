@@ -4,6 +4,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from transforms3d._gohlketransforms import euler_from_quaternion
+from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 import math
 from geometry_msgs.msg import Twist, Pose
 from nav_msgs.msg import Odometry
@@ -15,6 +16,9 @@ import itertools
 class ControllerNode(Node):
     def __init__(self):
         super().__init__('controller_node')
+        # Create client object
+        self.sim_client = RemoteAPIClient()
+        self.sim = self.sim_client.getObject('sim')
         self.bridge = CvBridge()
         
         # Create attributes to store odometry pose and velocity
@@ -67,6 +71,8 @@ class ControllerNode(Node):
         self.closest_distance = 10.0
         self.active_sensor = None
 
+        self.blaster_trans = np.array([0.20, 0, 0.2])
+        self.seen_tower = False
         self.old_tower_width = 0
         self.min_tower_width = np.inf
         self.max_tower_width = 0
@@ -292,8 +298,8 @@ class ControllerNode(Node):
                                 row_color += 1
                         # self.get_logger().info(f'row color: {row_color}, width color: {width_color}')
                         # self.get_logger().info(f"row color: {row_color}, max width: {width_color}")
-                        if row_color >= width_color-5 and row_color <= width_color+5 and width_color > self.min_tower_width + 15:
-                            self.state = "shoot_tower"
+                        if row_color >= width_color-5 and row_color <= width_color+5 and width_color > self.min_tower_width + 20:
+                            self.state = "align_tower"
                             self.get_logger().info(f"min width: {self.min_tower_width}, width current: {width_color}")
                             # You may want to return True here or set a flag
                             break
@@ -302,6 +308,26 @@ class ControllerNode(Node):
                     else:
                         continue
                             
+
+            # # Analyze tower shape to detect if facing a complete side
+            # # Find contours of the tower
+            # contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # if contours and self.check_tower_in_view(max_row):
+            #     # Get the largest contour (the tower)
+            #     largest_contour = max(contours, key=cv2.contourArea)
+                
+            #     # Calculate bounding rectangle
+            #     x, y, w, h = cv2.boundingRect(largest_contour)
+                
+            #     # Calculate aspect ratio (width/height)
+            #     aspect_ratio = w / h if h > 0 else 0
+
+            #     # Check if robot is facing a complete side of the tower
+            #     if aspect_ratio > 0.5:
+            #         # Tower is facing the robot
+            #         self.get_logger().info("Tower is facing the robot")
+            #         self.state = 'align_tower'
             # self.get_logger().info(f"Tower width: {self.min_tower_width}, {self.max_tower_width}, {self.is_growing_tower_width}")
             
             moments = cv2.moments(mask)
@@ -316,6 +342,27 @@ class ControllerNode(Node):
             self.get_logger().warn(f"Camera processing error: {e}", throttle_duration_sec=1.0)
             
         return None
+    
+    def shoot_projectile(self, position, velocity):
+        # Create a small sphere (projectile)
+        radius = 0.05
+        mass = 1
+        projectile_handle = self.sim.createPureShape(
+            1,  # primitiveType: sphere
+            8,  # options
+            [radius, radius, radius],  # size
+            mass,
+            None
+        )
+        # Position the projectile
+        self.sim.setObjectPosition(projectile_handle, -1, position)
+        
+        # Set initial velocity — simulate shooting
+        self.sim.setObjectFloatParam(projectile_handle, self.sim.shapefloatparam_init_velocity_x, velocity[0])
+        self.sim.setObjectFloatParam(projectile_handle, self.sim.shapefloatparam_init_velocity_y, velocity[1])
+        self.sim.setObjectFloatParam(projectile_handle, self.sim.shapefloatparam_init_velocity_z, velocity[2])
+
+        self.get_logger().info("Projectile spawned and fired.")
         
     def update_callback(self):
         if self.odom_pose is None:
@@ -332,21 +379,21 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = 0.0
                 self.orbit_start_yaw = current_pose[2]
                 self.state = "orbit_tower"
-                # self.get_logger().info(f"Switching to orbit mode at distance: {min(self.range_1, self.range_3):.2f}m")
+                self.get_logger().info(f"Switching to orbit mode at distance: {min(self.range_1, self.range_3):.2f}m")
             else:
-                # Use camera to center the tower while approaching
-                tower_position = self.get_tower_position_from_camera()
-                if tower_position is not None:
-                    # Adjust orientation to keep tower centered while approaching
-                    angular_velocity = -0.5 * tower_position
-                    cmd_vel.angular.z = angular_velocity
-                    cmd_vel.linear.x = 0.2
-                    # self.get_logger().info(f"Approaching tower: position={tower_position:.2f}, angular_vel={angular_velocity:.2f}")
-                else:
+                # # Use camera to center the tower while approaching
+                # tower_position = self.get_tower_position_from_camera()
+                # if tower_position is not None:
+                #     # Adjust orientation to keep tower centered while approaching
+                #     angular_velocity = -0.5 * tower_position
+                #     cmd_vel.angular.z = angular_velocity
+                #     cmd_vel.linear.x = 0.2
+                #     self.get_logger().info(f"Approaching tower: position={tower_position:.2f}, angular_vel={angular_velocity:.2f}")
+                # else:
                     # Search for tower by rotating if not visible
-                    cmd_vel.linear.x = 0.0
-                    cmd_vel.angular.z = 0.3
-                    # self.get_logger().info("Searching for tower")
+                cmd_vel.linear.x = 0.0
+                cmd_vel.angular.z = 0.3
+                self.get_logger().info("Searching for tower")
         
         elif self.state == "orbit_tower":
             # Get the sensor closest to the tower
@@ -422,10 +469,40 @@ class ControllerNode(Node):
                 cmd_vel.linear.x = 0.0
                 cmd_vel.angular.z = 0.3
                 self.get_logger().warn("Tower lost from view - searching")
-        
+        elif self.state == 'align_tower':
+            self.get_logger().info(f"range right: {self.range_1}, range left: {self.range_3}")
+            if not self.seen_tower:
+                cmd_vel.linear.x = 0.0
+                cmd_vel.angular.z = -0.3
+                if self.range_1 != self.range_3:
+                    self.seen_tower = True
+            else:
+                if self.range_1 != self.range_3:
+                    cmd_vel.linear.x = 0.0
+                    cmd_vel.angular.z = -0.3
+                else:
+                    self.state = 'shoot_tower'
+                    
+            # if abs(self.range_1 - self.range_3) > 0.5 or (self.range_1 == self.range_3 and):
+            #     cmd_vel.linear.x = 0.0
+            #     cmd_vel.angular.z = -0.3
+            #     if self.range_1 != self.range_3:
+            #         self.seen_tower = True
+            # elif self.seen_tower == True and self.range_1 == self.range_3:
         elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
+            robot_x, robot_y, yaw = self.pose3d_to_2d(self.odom_pose)
+            rot_matrix = np.array([[np.cos(yaw), -np.sin(yaw),0],
+                       [np.sin(yaw), np.cos(yaw),0],
+                       [0,0,1]])
+            new_trans = rot_matrix@self.blaster_trans
+            projectile_pos = (robot_x + new_trans[0], robot_y + new_trans[1], new_trans[2])
+            self.get_logger().info(f"robot pos: {robot_x, robot_y}, projectile pos: {projectile_pos}")
+            velocity = rot_matrix@np.array([3.0, 0.0, 3.0])  # shoot forward and upward
+            self.get_logger().info(f"{velocity}")
+
+            self.shoot_projectile(projectile_pos, velocity)
             self.get_logger().info("Task completed!")
         
         self.vel_publisher.publish(cmd_vel)
