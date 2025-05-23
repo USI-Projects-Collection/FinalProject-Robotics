@@ -8,7 +8,8 @@ from geometry_msgs.msg import Twist
 class MockMapPublisher(Node):
     def __init__(self):
         super().__init__('mock_map_publisher')
-        res, w, h = 0.1, 200, 200         # 10 m × 10 m, 5 cm/cella
+        # 5 cm resolution on a 100 × 100 grid → physical map size 5 m × 5 m
+        res, w, h = 0.05, 100, 100
         ox, oy    = -2.5, -2.5
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
@@ -54,14 +55,26 @@ class MockMapPublisher(Node):
 
     def _cmd_callback(self, msg):
         self.cmd_vel = msg
-        self.get_logger().info(f"Received cmd_vel: {msg.linear.x}, {msg.angular.z}")
-        if self.cmd_vel.linear.x is None and self.current_tower < len(self.tower_goals) and not self.flag:
+        v = msg.linear.x
+        w = msg.angular.z
+        self.get_logger().info(f"Received cmd_vel: v={v:.3f} m/s, w={w:.3f} rad/s")
+
+        # ---- detect arrival at tower ----
+        # consider the robot "stopped" when both linear and angular speeds are ≈ 0
+        stopped = abs(v) < 0.01 and abs(w) < 0.01
+
+        if stopped and not self.flag:
+            # advance to next tower (wrap around at the end)
+            if self.current_tower < len(self.tower_goals) - 1:
+                self.current_tower += 1
+            else:
+                self.current_tower = 0
             self.flag = True
-            self.current_tower += 1
-        else:
+        elif not stopped:
+            # reset flag as soon as the robot moves again
             self.flag = False
-        
-        self.get_logger().info(f"Received cmd_vel: {msg.linear.x}, {msg.angular.z} \n curret_tower: {self.current_tower}")
+
+        self.get_logger().info(f"cmd_vel: v={v:.3f}, w={w:.3f} → current_tower: {self.current_tower}")
 
 
     def publish_goal(self):

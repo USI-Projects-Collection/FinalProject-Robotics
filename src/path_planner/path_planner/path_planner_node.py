@@ -22,8 +22,8 @@ class AStarPlanner(Node):
 
         # -- path following --
         self.path_points   = []     # list[(x, y)] in world coords
-        self.lookahead     = 0.10   # [m]
-        self.waypoint_tol  = 0.05   # [m]
+        self.lookahead     = 0.25   # [m] look‑ahead distance for pure‑pursuit
+        self.waypoint_tol  = 0.15   # [m] stop this far before hitting the tower
         self.max_lin       = 0.25   # [m/s]
         self.max_ang       = 1.5    # [rad/s]
 
@@ -101,24 +101,30 @@ class AStarPlanner(Node):
 
         # ----- follow current path -----
         if self.path_points:
-            target_x, target_y = self.path_points[0]
+            # pick the first waypoint at least self.lookahead metres ahead
+            target_x, target_y = self.path_points[-1]   # fallback: last waypoint
+            for px, py in self.path_points:
+                if math.hypot(px - self.current_pose.position.x, py - self.current_pose.position.y) > self.lookahead:
+                    target_x, target_y = px, py
+                    break
+
             dx = target_x - self.current_pose.position.x
             dy = target_y - self.current_pose.position.y
             dist = math.hypot(dx, dy)
+
             if dist < self.waypoint_tol:
-                # reached waypoint
-                self.path_points.pop(0)
-                if not self.path_points:
-                    self.pub_cmd.publish(Twist())  # stop
-                    self.get_logger().info('Arrivato al goal – stop movimento')
+                # reached final waypoint
+                self.path_points.clear()
+                self.pub_cmd.publish(Twist())  # stop
+                self.get_logger().info('Arrivato al goal – stop movimento')
             else:
                 ref_yaw = math.atan2(dy, dx)
                 cur_yaw = self._quat2yaw(self.current_pose.orientation)
                 err_yaw = math.atan2(math.sin(ref_yaw - cur_yaw), math.cos(ref_yaw - cur_yaw))
+
                 cmd = Twist()
-                # simple P controller
-                cmd.linear.x  = min(self.max_lin, 0.8 * dist)
-                cmd.angular.z = max(-self.max_ang, min(self.max_ang, 3.0 * err_yaw))
+                cmd.linear.x  = min(self.max_lin, 0.6 * dist)   # smoother speed
+                cmd.angular.z = max(-self.max_ang, min(self.max_ang, 2.0 * err_yaw))
                 self.pub_cmd.publish(cmd)
 
 
@@ -131,6 +137,14 @@ class AStarPlanner(Node):
             return
         start = self.world2grid(self.current_pose.position)
         g     = self.world2grid(goal.pose.position)
+        # If the desired goal cell is occupied, snap to the nearest free cell
+        if self.grid[g[1], g[0]] >= 50:
+            g = self._nearest_free(g)
+            wx, wy = self.grid2world(g)
+            # update stored goal so continuous replanning uses the adjusted point
+            self.goal_pose.x = wx
+            self.goal_pose.y = wy
+            self.get_logger().warn('Goal inside obstacle – shifted to nearest free cell')
         path  = self.astar(start, g)
         path = self._prune_path(path)
         self.publish_path(path, goal.header.frame_id)
@@ -216,6 +230,28 @@ class AStarPlanner(Node):
                 pruned.append(cells[idx - 1])
         pruned.append(cells[-1])
         return pruned
+
+    def _nearest_free(self, cell):
+        """
+        Return the closest free cell (occupancy < 50) to the requested goal cell.
+        Uses a breadth‑first search expanding in 8‑connected space.
+        """
+        from collections import deque
+        dirs = [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]
+        q = deque([cell])
+        visited = set()
+        while q:
+            cx, cy = q.popleft()
+            if (cx, cy) in visited:
+                continue
+            visited.add((cx, cy))
+            if 0 <= cx < self.grid.shape[1] and 0 <= cy < self.grid.shape[0]:
+                if self.grid[cy, cx] < 50:
+                    return (cx, cy)
+                for dx, dy in dirs:
+                    q.append((cx + dx, cy + dy))
+        # fallback (should not happen): return original cell
+        return cell
 
     def _quat2yaw(self, q):
         """Return yaw (Z‑axis rotation) from geometry_msgs/Quaternion without external libs."""
