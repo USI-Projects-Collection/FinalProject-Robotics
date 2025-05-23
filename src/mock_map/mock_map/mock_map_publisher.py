@@ -46,7 +46,7 @@ class MockMapPublisher(Node):
 
         # publisher to send goal pose at 10Hz
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 1)
-        self.goal_timer = self.create_timer(0.1, self.publish_goal)
+        self.goal_timer = self.create_timer(2, self.publish_goal)
 
     def _tick(self):
         self.msg.header.stamp = self.get_clock().now().to_msg()
@@ -60,8 +60,8 @@ class MockMapPublisher(Node):
             self.current_tower += 1
         else:
             self.flag = False
-            
-        self.get_logger().info(f"Received cmd_vel: {msg.linear.x}, {msg.angular.z}")
+        
+        self.get_logger().info(f"Received cmd_vel: {msg.linear.x}, {msg.angular.z} \n curret_tower: {self.current_tower}")
 
 
     def publish_goal(self):
