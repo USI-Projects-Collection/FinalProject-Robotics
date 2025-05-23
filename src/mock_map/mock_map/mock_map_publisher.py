@@ -4,6 +4,7 @@ from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import Pose, PoseStamped
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool
 
 class MockMapPublisher(Node):
     def __init__(self):
@@ -14,7 +15,8 @@ class MockMapPublisher(Node):
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
         # for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, 2, 1, 1)]:
-        self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
+        # self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
+        self.tower_goals = [(1.3, -1.3, 0.15, 0.25)]
         for x0, y0, dx, dy in self.tower_goals:
         # for x0, y0, dx, dy in [(-2, -3, 0.5, 1)]:
             ix,  iy  = int((x0-ox)/res),  int((y0-oy)/res)
@@ -48,12 +50,31 @@ class MockMapPublisher(Node):
         # publisher to send goal pose at 10Hz
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 1)
         self.goal_timer = self.create_timer(2, self.publish_goal)
+        self.go_again = True
+        self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 10)
+        self.goal_reached = False
+        self.sub_goal_reached = self.create_subscription(Bool, '/goal_reached', self._goal_reached_cb, 10)
+    
+    def _goal_reached_cb(self, msg):
+        if msg.data:
+            self.goal_reached = True
+            self.go_again = False
+            self.get_logger().info("Mock map off track...")
+
+    def go_again_cb(self, msg):
+        if msg.data:
+            self.go_again = True
+            self.get_logger().info("Mock map back on track...")
 
     def _tick(self):
+        if not self.go_again:
+            return
         self.msg.header.stamp = self.get_clock().now().to_msg()
         self.pub.publish(self.msg)
 
     def _cmd_callback(self, msg):
+        if not self.go_again:
+            return
         self.cmd_vel = msg
         v = msg.linear.x
         w = msg.angular.z
@@ -74,10 +95,12 @@ class MockMapPublisher(Node):
             # reset flag as soon as the robot moves again
             self.flag = False
 
-        self.get_logger().info(f"cmd_vel: v={v:.3f}, w={w:.3f} → current_tower: {self.current_tower}")
+        self.get_logger().info(f"cmd_vel: v={v:.3f}, w={w:.3f} → current_tower: {self.current_tower} , tower in {self.tower_goals[self.current_tower]}")
 
 
     def publish_goal(self):
+        if not self.go_again:
+            return
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = 'map'
@@ -89,7 +112,10 @@ class MockMapPublisher(Node):
 
 def main():
     rclpy.init()
-    rclpy.spin(MockMapPublisher())
+    try:
+        rclpy.spin(MockMapPublisher())
+    except KeyboardInterrupt:
+        pass
     rclpy.shutdown()
 
 if __name__ == '__main__':

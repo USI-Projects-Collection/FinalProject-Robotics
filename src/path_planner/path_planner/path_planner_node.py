@@ -7,10 +7,11 @@ from std_msgs.msg import Header
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
+from std_msgs.msg import Bool
 
-class AStarPlanner(Node):
+class PathPlannerNode(Node):
     def __init__(self):
-        super().__init__('a_star_planner')
+        super().__init__('path_planner_node')
         # Nota: tutti i topic robot‑specifici sono relativi; lancia il nodo con --namespace <robot> (es. rm0)
         self.grid = None
         self.res  = 0.05
@@ -23,12 +24,12 @@ class AStarPlanner(Node):
         # -- path following --
         self.path_points   = []     # list[(x, y)] in world coords
         self.lookahead     = 0.25   # [m] look‑ahead distance for pure‑pursuit
-        self.waypoint_tol  = 0.15   # [m] stop this far before hitting the tower
+        self.waypoint_tol  = 0.2   # [m] stop this far before hitting the tower
         self.max_lin       = 0.25   # [m/s]
         self.max_ang       = 1.5    # [rad/s]
 
         self.sub_map   = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
-        self.sub_goal  = self.create_subscription(PoseStamped, 'goal_pose', self.goal_cb, 10)  # relativo: /rm0/goal_pose quando in namespace
+        self.sub_goal  = self.create_subscription(PoseStamped, '/goal_pose', self.goal_cb, 10)  # relativo: /rm0/goal_pose quando in namespace
         # Odometry topic pubblicato dal driver Robomaster
         self.sub_odom  = self.create_subscription(Odometry, '/rm0/odom', self.odom_cb, qos_profile_sensor_data)
         self.get_logger().info('Subscribed to /rm0/odom')
@@ -36,14 +37,24 @@ class AStarPlanner(Node):
         self.pub_path  = self.create_publisher(Path, 'plan', 10)       # relativo: /rm0/plan
         self.pub_cmd   = self.create_publisher(Twist, '/rm0/cmd_vel', 10)   # assoluto: driver robomaster
         self.pub_pos   = self.create_publisher(PoseStamped, 'current_pose', 10)         # relativo: /rm0/current_pose
+        
+        self.pub_goal_reached = self.create_publisher(Bool, '/goal_reached', 10)
+        self.go_again = True
+        self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 10)
 
         # Broadcaster per odom -> base_link (RViz non scarterà più i messaggi)
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.current_pose = None
 
+    def go_again_cb(self, msg):
+        if msg.data:
+            self.go_again = True
+            self.get_logger().info("Path planner back on track...")
     # ---------- callback ----------
     def map_cb(self, msg):
+        if not self.go_again:
+            return
         self.res     = msg.info.resolution 
         self.origin  = (msg.info.origin.position.x, msg.info.origin.position.y)
         self.grid    = np.array(msg.data, dtype=np.int8).reshape((msg.info.height, msg.info.width))
@@ -65,6 +76,8 @@ class AStarPlanner(Node):
         self.get_logger().info('Mappa inflazionata per tener conto delle dimensioni del robot')
 
     def odom_cb(self, msg):
+        if not self.go_again:
+            return
         # msg is nav_msgs/Odometry
         self.current_pose = msg.pose.pose
         # pubblica trasformazione rm0/odom -> rm0/base_link
@@ -116,6 +129,8 @@ class AStarPlanner(Node):
                 # reached final waypoint
                 self.path_points.clear()
                 self.pub_cmd.publish(Twist())  # stop
+                self.pub_goal_reached.publish(Bool(data=True))
+                self.go_again = False
                 self.get_logger().info('Arrivato al goal – stop movimento')
             else:
                 ref_yaw = math.atan2(dy, dx)
@@ -129,6 +144,8 @@ class AStarPlanner(Node):
 
 
     def goal_cb(self, goal):
+        if not self.go_again:
+            return
         # save goal for continuous replanning
         self.goal_pose     = goal.pose.position
         self.goal_frame_id = goal.header.frame_id
@@ -280,7 +297,10 @@ class AStarPlanner(Node):
 
 def main():
     rclpy.init()
-    rclpy.spin(AStarPlanner())
+    try:
+        rclpy.spin(PathPlannerNode())
+    except KeyboardInterrupt:
+        pass
     rclpy.shutdown()
 
 if __name__ == '__main__':

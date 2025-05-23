@@ -28,5 +28,8 @@
        The `output` option configures the node to print to the terminal, to help with debugging.
        By default, nodes launched from a launch file print their output to a log file.
   -->
+  <!-- Mock Map Publisher -->
+  <node pkg="mock_map" exec="mock_map_publisher" namespace="$(var name)" output="screen" />
+  <node pkg="path_planner" exec="path_planner_node" namespace="$(var name)" output="screen" />
   <node pkg="assignment2" exec="controller_node" namespace="$(var name)" output='screen' />
 </launch>
