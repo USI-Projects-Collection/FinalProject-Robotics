@@ -254,5 +254,10 @@ AMENT_IGNORE
 
 ### pixi ###
 .pixi
-pixi.lock
-pixi.toml
+
+# macOS
+.DS_Store
+
+# python
+__pycache__/
+*.pyc
