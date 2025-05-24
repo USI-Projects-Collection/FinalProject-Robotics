@@ -162,6 +162,21 @@ class ControllerNode(Node):
             yaw  # theta orientation
         )
         return pose2
+    
+    def pose3d_to_2d_with_orientation(self, pose3):
+        quaternion = (
+            pose3.orientation.x,
+            pose3.orientation.y,
+            pose3.orientation.z,
+            pose3.orientation.w
+        )
+        roll, pitch, yaw = euler_from_quaternion(quaternion)
+        pose2 = (
+            pose3.position.x,  # x position
+            pose3.position.y,  # y position
+            roll  # theta orientation
+        )
+        return pose2
         
     def normalize_angle(self, angle):
         """Normalize angle to be between [-pi, pi]."""
@@ -569,13 +584,14 @@ class ControllerNode(Node):
         elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
-            robot_x, robot_y, yaw = self.pose3d_to_2d(self.odom_pose)
-            rot_matrix = np.array([[np.cos(yaw), -np.sin(yaw),0],
-                       [np.sin(yaw), np.cos(yaw),0],
+            robot_x, robot_y, roll = self.pose3d_to_2d_with_orientation(self.odom_pose)
+            rot_matrix = np.array([[np.cos(roll), -np.sin(roll),0],
+                       [np.sin(roll), np.cos(roll),0],
                        [0,0,1]])
             new_trans = rot_matrix@self.blaster_trans
             projectile_pos = (robot_x + new_trans[0], robot_y + new_trans[1], new_trans[2])
-            self.get_logger().info(f"robot pos: {robot_x, robot_y}, projectile pos: {projectile_pos}")
+            self.get_logger().info(f"robot pos: {robot_x, robot_y}, roll: {roll}, projectile pos: {projectile_pos}")
+
             velocity = rot_matrix@np.array([3.0, 0.0, 3.0])  # shoot forward and upward
             self.get_logger().info(f"{velocity}")
 
@@ -584,6 +600,7 @@ class ControllerNode(Node):
             self.turn_ended.publish(Bool(data=True))
             self.state = "find_tower"
             self.get_logger().info("Task completed!")
+
 
         elif self.state == "align_to_shoot":
             # Stop and prepare for shooting
