@@ -15,7 +15,7 @@ class MockMapPublisher(Node):
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
         # for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, 2, 1, 1)]:
-        self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
+        self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
         # self.tower_goals = [(1.3, -1.3, 0.15, 0.25)]
         for x0, y0, dx, dy in self.tower_goals:
         # for x0, y0, dx, dy in [(-2, -3, 0.5, 1)]:
