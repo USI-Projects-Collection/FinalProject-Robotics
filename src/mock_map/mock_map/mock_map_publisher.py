@@ -14,14 +14,34 @@ class MockMapPublisher(Node):
         ox, oy    = -2.5, -2.5
 
         grid = np.full((h, w), 0, dtype=np.int8)     # 0 = libero
-        # for x0, y0, dx, dy in [(-2, -1, 1, 6), (1.5, 1, 3, 1), (-0.5, 2, 1, 1)]:
+
         self.tower_goals = [(1.3, -1.3, 0.15, 0.25), (-1.45, 1.575, 0.15, 0.25), (1.325, 1.55, 0.15, 0.25), (-1.4, -1.3, 0.15, 0.25)]
-        # self.tower_goals = [(1.3, -1.3, 0.15, 0.25)]
+        self.obstacles = [(0.0,  1.4, 0.2),(-0.5, -0.5, 0.3),(0.0, -1.5, 0.3)]
+
         for x0, y0, dx, dy in self.tower_goals:
         # for x0, y0, dx, dy in [(-2, -3, 0.5, 1)]:
             ix,  iy  = int((x0-ox)/res),  int((y0-oy)/res)
             ixe, iye = int((x0+dx-ox)/res), int((y0+dy-oy)/res)
             grid[iy:iye, ix:ixe] = 100                # 100 = occupato
+
+        # 2️⃣  Rimpiazza il ciclo che disegna i rettangoli con il cerchio
+        for x0, y0, r in self.obstacles:
+            cx = int((x0 - ox) / res)
+            cy = int((y0 - oy) / res)
+            rc = int(r / res) + 1  # raggio in celle
+
+            for dy in range(-rc, rc + 1):
+                for dx in range(-rc, rc + 1):
+                    if dx*dx + dy*dy <= rc*rc:  # dentro il cerchio
+                        # Disegna tutti i quadranti del cerchio
+                        for gx, gy in [
+                            (cx + dx, cy + dy),  # Quadrante 1
+                            (cx - dx, cy + dy),  # Quadrante 2
+                            (cx + dx, cy - dy),  # Quadrante 3
+                            (cx - dx, cy - dy),  # Quadrante 4
+                        ]:
+                            if 0 <= gx < w and 0 <= gy < h:
+                                grid[gy, gx] = 100
 
         # ---- debug: quante celle sono state marcate a 100? ----
         occ_cells = int(np.count_nonzero(grid == 100))
