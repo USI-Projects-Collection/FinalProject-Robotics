@@ -24,7 +24,7 @@ class PathPlannerNode(Node):
         # -- path following --
         self.path_points   = []     # list[(x, y)] in world coords
         self.lookahead     = 0.25   # [m] look‑ahead distance for pure‑pursuit
-        self.waypoint_tol  = 0.2   # [m] stop this far before hitting the tower
+        self.waypoint_tol  = 0.6   # [m] stop a bit further before the tower
         self.max_lin       = 0.25   # [m/s]
         self.max_ang       = 1.5    # [rad/s]
 
@@ -62,7 +62,7 @@ class PathPlannerNode(Node):
 
         # Inflate obstacles to account for robot size
         inflated_grid = np.copy(self.grid)
-        inflate_radius = int(0.3 / self.res)  # raggio di inflazione in celle (es. 30cm)
+        inflate_radius = int((self.waypoint_tol - (0.3 * self.waypoint_tol)) / self.res)  # 30% smaller than waypoint_tol
 
         for y in range(self.grid.shape[0]):
             for x in range(self.grid.shape[1]):
@@ -154,14 +154,7 @@ class PathPlannerNode(Node):
             return
         start = self.world2grid(self.current_pose.position)
         g     = self.world2grid(goal.pose.position)
-        # If the desired goal cell is occupied, snap to the nearest free cell
-        if self.grid[g[1], g[0]] >= 50:
-            g = self._nearest_free(g)
-            wx, wy = self.grid2world(g)
-            # update stored goal so continuous replanning uses the adjusted point
-            self.goal_pose.x = wx
-            self.goal_pose.y = wy
-            self.get_logger().warn('Goal inside obstacle – shifted to nearest free cell')
+        # Always aim at the exact tower centre; no nearest‑free correction here
         path  = self.astar(start, g)
         path = self._prune_path(path)
         self.publish_path(path, goal.header.frame_id)
