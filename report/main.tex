@@ -11,6 +11,14 @@
 
 \newcommand{\code}[1]{{\tt #1}}
 
+\makeatletter
+\newcommand{\subsubsubsection}[1]{%
+  % Slightly smaller font and forced line break
+  {\small\bfseries #1\par}%
+  \vspace{0.5\baselineskip}%
+}
+\makeatother
+
 % decreas margin size
 \usepackage[margin=0.7in]{geometry}
 

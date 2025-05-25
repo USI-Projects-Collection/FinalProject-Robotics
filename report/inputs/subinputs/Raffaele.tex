@@ -1,11 +1,10 @@
-\section{Tower Detection and Interaction System}
-\subsection{System Overview}
+\subsubsection{System Overview}
 The tower detection and interaction system represents a sophisticated autonomous targeting solution. The system integrates multiple sensor modalities including range sensors, RGB camera, and odometry to enable a mobile robot to autonomously locate, approach, orbit, and engage tower targets in a dynamic environment.
 The core architecture follows a finite state machine approach with six primary operational states: \textit{find\_tower}, \textit{position\_for\_orbit}, \textit{orbit\_tower}, \textit{avoid\_obstacle}, \textit{align\_tower}, and \textit{shoot\_tower}. This state-based design ensures robust behavior transitions and clear operational logic flow through well-defined transition criteria and sensor-based decision making.
 The main control loop executes at 60 Hz, providing real-time responsiveness while maintaining computational efficiency. \\
 Key ROS2 topics include velocity commands (\texttt{cmd\_vel}), odometry data (\texttt{odom}), individual range sensor readings (\texttt{/rm0/range\_{0-3}}), and camera imagery (\texttt{/rm0/camera/image\_color}).
-\subsection{Sensor Integration and Data Processing}
-\subsubsection{Range Sensor Configuration and Calibration}
+\subsubsection{Sensor Integration and Data Processing}
+\subsubsubsection{Range Sensor Configuration and Calibration}
 The system utilizes four range sensors positioned strategically around the robot platform to provide environmental awareness:
 \begin{itemize}
 \item \textbf{Range\_0 (Center-right)}: Primary sensor for orbit distance maintenance during left-side orbital maneuvers. Positioned at the robot's right quadrant with a detection range up to 10 meters.
@@ -19,7 +18,7 @@ Readings exceeding 10 meters are considered invalid and replaced with the maximu
 d_{filtered}(t) = \alpha \cdot d_{raw}(t) + (1-\alpha) \cdot d_{filtered}(t-1)
 \end{align}
 where $\alpha = 0.8$ provides a balance between responsiveness and stability.
-\subsubsection{Computer Vision System Architecture}
+\subsubsubsection{Computer Vision System Architecture}
 The vision system employs a comprehensive computer vision pipeline optimized for real-time tower detection and tracking. The process begins with image acquisition from the robot's RGB camera, followed by color space conversion and multi-stage filtering.\\
 \textbf{Color Space Processing:}
 The system converts incoming BGR images to HSV color space to achieve robust color-based detection under varying lighting conditions. HSV provides superior color constancy compared to RGB, particularly important for outdoor or variable lighting scenarios.\\
@@ -44,11 +43,11 @@ The system implements a visibility metric based on the ratio of red pixels to to
 R_{red} = \frac{\sum_{x,y} \text{Mask}_{final}(x,y)}{W \times H}
 \end{align}
 Tower visibility is confirmed when $R_{red} > \tau_{visibility}$, where the threshold $\tau_{visibility}$ is dynamically adjusted based on environmental conditions and historical detection performance.
-\subsection{State Machine Implementation and Control Logic}
-\subsubsection{State Transition Architecture}
+\subsubsection{State Machine Implementation and Control Logic}
+\subsubsubsection{State Transition Architecture}
 The finite state machine implementation employs a hierarchical structure with clearly defined transition conditions and state-specific behaviors. Each state maintains internal variables for tracking progress and implementing timeouts to prevent infinite loops or deadlock conditions.
 State transitions are triggered by combinations of sensor readings, timing constraints, and task completion flags. The system implements hysteresis in transition conditions to prevent oscillation between states due to sensor noise or borderline threshold conditions.
-\subsubsection{Tower Discovery Phase: \textit{find\_tower} State}
+\subsubsubsection{Tower Discovery Phase: \textit{find\_tower} State}
 The initial search phase implements a systematic rotational search pattern optimized for comprehensive environmental scanning while minimizing search time.
 \textbf{Search Strategy:}
 The robot executes counterclockwise rotation at $\omega_{search} = 0.5$ rad/s while continuously monitoring the front-right range sensor (Range\_1). This angular velocity provides optimal balance between search speed and sensor update rates, ensuring no potential targets are missed during rotation.
@@ -60,7 +59,7 @@ d_{Range1} \leq d_{target} + \delta_{tolerance}
 where $d_{target} = 2.0$ meters represents the desired orbital radius and $\delta_{tolerance} = 0.1$ meters provides measurement uncertainty accommodation.
 \textbf{Multi-Sensor Validation:}
 Upon initial detection, the system performs cross-validation using adjacent sensors to confirm target authenticity and eliminate false positives from environmental artifacts or sensor noise. The validation process requires consistent readings across multiple sensor cycles to prevent premature state transitions.
-\subsubsection{Orbital Positioning Phase: \textit{position\_for\_orbit} State}
+\subsubsubsection{Orbital Positioning Phase: \textit{position\_for\_orbit} State}
 This critical state ensures proper spatial relationship between robot and tower before initiating orbital maneuvers.
 \textbf{Geometric Positioning Strategy:}
 The system executes a controlled rotation to position the detected tower relative to the robot's right side, enabling subsequent left-side orbital motion. The positioning maneuver uses angular velocity $\omega_{position} = 0.5$ rad/s while monitoring the back-right sensor (Range\_0).
@@ -72,7 +71,7 @@ d_{Range0} \leq d_{target} + \delta_{position}
 where $\delta_{position} = 0.5$ meters provides sufficient tolerance for initial orbital entry while maintaining proximity to the target distance.
 \textbf{Timeout and Recovery Mechanisms:}
 The state implements timeout protection to prevent infinite positioning attempts. If positioning cannot be achieved within a predetermined time window, the system reverts to the search state with modified search parameters.
-\subsubsection{Orbital Navigation Control: \textit{orbit\_tower} State}
+\subsubsubsection{Orbital Navigation Control: \textit{orbit\_tower} State}
 The orbital control system represents the most sophisticated aspect of the navigation architecture, combining multiple control loops for stable circular motion around the detected tower.
 \textbf{Multi-Loop Control Architecture:}
 The orbital controller implements two primary control loops operating in parallel:
@@ -117,7 +116,7 @@ v_{linear} &\in [0.05, 0.3] \text{ m/s} \
 \omega_{angular} &\in [-\infty, -0.1] \text{ rad/s}
 \end{align}
 The angular velocity constraint ensures consistent counterclockwise motion while preventing excessive rotation rates that could destabilize the orbital behavior.
-\subsubsection{Advanced Obstacle Avoidance Protocol: \textit{avoid\_obstacle} State}
+\subsubsubsection{Advanced Obstacle Avoidance Protocol: \textit{avoid\_obstacle} State}
 The obstacle avoidance system implements a sophisticated dual-objective navigation strategy that maintains safe distances from obstacles while preserving awareness of the primary tower target.
 \textbf{Obstacle Detection and Classification:}
 Obstacle detection triggers when front sensors detect objects within the critical threshold:
@@ -146,8 +145,8 @@ The return condition requires:
 (d_{Range2} > d_{clearance}) \land (d_{Range0} < d_{tower,\max}) \land \text{flag}_{almost\_avoided}
 \end{align}
 where $d_{clearance} = 10.0$ meters indicates obstacle clearance and $\text{flag}_{almost\_avoided}$ prevents premature return attempts.
-\subsection{Tower Alignment and Targeting System}
-\subsubsection{Multi-Modal Alignment Detection}
+\subsubsection{Tower Alignment and Targeting System}
+\subsubsubsection{Multi-Modal Alignment Detection}
 The tower alignment system employs multiple complementary detection methods to ensure optimal positioning for target engagement. The system combines computer vision analysis with sensor-based geometric validation for robust alignment determination.
 \textbf{Computer Vision-Based Alignment:}
 The primary alignment detection utilizes advanced computer vision techniques to analyze tower geometry and orientation relative to the robot's position.
@@ -181,7 +180,7 @@ The width-based alignment criterion requires:
 w_{current} \geq w_{min} + \delta_{width}
 \end{align}
 where $w_{min}$ represents the minimum observed tower width and $\delta_{width} = 20$ pixels provides sufficient margin for reliable detection.
-\subsubsection{Sensor-Based Geometric Validation}
+\subsubsubsection{Sensor-Based Geometric Validation}
 To complement vision-based alignment, the system implements sensor-based geometric validation using bilateral range measurements.
 \textbf{Symmetry Detection:}
 The alignment validation compares readings from left and right range sensors:
@@ -201,20 +200,20 @@ The alignment process follows a systematic approach:
 \item \textbf{Symmetry Convergence}: Fine positioning adjustments to achieve bilateral sensor equality
 \item \textbf{Alignment Confirmation}: Final validation using both vision and sensor criteria
 \end{enumerate}
-\subsubsection{State Transition Logic and Validation}
+\subsubsubsection{State Transition Logic and Validation}
 The transition from alignment to shooting state requires satisfaction of multiple criteria:
 \begin{align}
 \text{Aligned} = (&AR > \tau_{aspect}) \land (\Delta_{symmetry} < \epsilon_{symmetry}) \
 &\land (\text{tower\_visible}) \land (\text{stable\_for} > t_{stabilization})
 \end{align}
 where $t_{stabilization}$ ensures the robot maintains alignment for sufficient duration before engagement.
-\subsubsection{Projectile Launch System}
+\subsubsubsection{Projectile Launch System}
 The \textit{shoot\_tower} state executes the engagement sequence through integration with the CoppeliaSim physics engine. The system calculates projectile spawn position using coordinate transformation:
 \begin{align} \mathbf{R} &= \begin{bmatrix} \cos(\psi) & -\sin(\psi) & 0 \\ \sin(\psi) & \cos(\psi) & 0 \\ 0 & 0 & 1 \end{bmatrix} \\ \mathbf{p}_{projectile} &= \mathbf{p}_{robot} + \mathbf{R} \cdot \mathbf{t}_{blaster} \end{align}
 where $\psi$ represents the robot's yaw angle and $\mathbf{t}_{blaster} = [0.20, 0, 0.2]^T$ meters defines the blaster offset from the robot center.
 The projectile receives initial velocity $\mathbf{v}_{projectile} = \mathbf{R} \cdot [3.0, 0.0, 3.0]^T$ m/s, providing forward momentum with upward trajectory compensation for ballistic flight.
-\subsection{System Integration and Performance Optimization}
-\subsubsection{Real-Time Processing Architecture}
+\subsubsection{System Integration and Performance Optimization}
+\subsubsubsection{Real-Time Processing Architecture}
 The complete system operates through a sophisticated real-time processing architecture designed for optimal performance and reliability in dynamic environments.
 \textbf{Timer-Based Control Loop:}
 The system utilizes a high-frequency ROS2 timer executing at 60 Hz to ensure responsive real-time behavior. This frequency provides excellent balance between computational efficiency and control responsiveness:
@@ -229,7 +228,7 @@ The system implements sensor data synchronization mechanisms to ensure coherent 
 \item \textbf{Data Consistency Checking}: Cross-validation between sensors to identify and filter erroneous readings
 \item \textbf{Interpolation and Prediction}: Linear interpolation for missing sensor data and predictive algorithms for compensating sensor latency
 \end{enumerate}
-\subsubsection{State Management and Transition Logic}
+\subsubsubsection{State Management and Transition Logic}
 The finite state machine implementation includes sophisticated state management capabilities to ensure robust operation under various environmental conditions.
 \textbf{State Persistence and Memory:}
 Each state maintains internal memory variables to preserve important information across state transitions:
@@ -240,7 +239,7 @@ Each state maintains internal memory variables to preserve important information
 \end{itemize}
 \textbf{Transition Hysteresis and Debouncing:} To prevent state oscillations due to sensor noise or borderline conditions, the system implements transition hysteresis: \begin{align} \text{Transition}{A \rightarrow B} &= (Condition_B > \tau{high}) \ \text{Transition}{B \rightarrow A} &= (Condition_A < \tau{low}) \end{align}
 where $\tau_{high} > \tau_{low}$ creates a hysteresis band that stabilizes state transitions.
-\subsubsection{Adaptive Parameter Tuning}
+\subsubsubsection{Adaptive Parameter Tuning}
 The system incorporates adaptive mechanisms to optimize performance based on environmental conditions and operational experience.
 \textbf{Dynamic Threshold Adaptation:}
 Sensor thresholds and detection parameters adapt based on environmental conditions:
@@ -258,7 +257,7 @@ K_{p,transition} & \text{if changing states}
 \end{cases}
 \end{align}
 This approach provides robust control performance across different operational phases.
-\subsubsection{Error Handling and Recovery Mechanisms}
+\subsubsubsection{Error Handling and Recovery Mechanisms}
 The system includes comprehensive error handling and recovery capabilities to maintain operational reliability.
 \textbf{Sensor Failure Detection:}
 The system monitors sensor health through multiple indicators:
@@ -283,7 +282,7 @@ The system includes automatic recovery mechanisms:
 \item \textbf{Sensor Re-calibration}: Dynamic recalibration of sensor parameters during operation
 \item \textbf{Emergency Stop}: Safe system shutdown and velocity zeroing in critical failure scenarios
 \end{itemize}
-\subsubsection{Performance Metrics and Optimization}
+\subsubsubsection{Performance Metrics and Optimization}
 The system tracks multiple performance metrics for continuous optimization:
 \textbf{Navigation Efficiency Metrics:}
 \begin{align}
