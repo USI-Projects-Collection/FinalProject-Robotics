@@ -8,8 +8,9 @@
 \contentsline {subsubsection}{\numberline {2.1.4}Challenges Encountered \& Fixes}{1}{subsubsection.2.1.4}%
 \contentsline {subsection}{\numberline {2.2}Tower Detection and Interaction System}{1}{subsection.2.2}%
 \contentsline {subsubsection}{\numberline {2.2.1}System Overview}{1}{subsubsection.2.2.1}%
-\contentsline {subsubsection}{\numberline {2.2.2}Sensor Integration and Data Processing}{1}{subsubsection.2.2.2}%
-\contentsline {subsubsection}{\numberline {2.2.3}State Machine Implementation and Control Logic}{2}{subsubsection.2.2.3}%
+\contentsline {subsubsection}{\numberline {2.2.2}System Overview}{1}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}Sensor Integration and Data Processing}{1}{subsubsection.2.2.3}%
+\contentsline {subsubsection}{\numberline {2.2.4}State Machine Implementation and Control Logic}{2}{subsubsection.2.2.4}%
 \contentsline {subsection}{\numberline {2.3}Weak‑Spot Detection \& Shooting}{4}{subsection.2.3}%
 \contentsline {subsubsection}{\numberline {2.3.1}Tower Alignment and Targeting System}{4}{subsubsection.2.3.1}%
 \contentsline {subsubsection}{\numberline {2.3.2}Alignment Detection}{4}{subsubsection.2.3.2}%
