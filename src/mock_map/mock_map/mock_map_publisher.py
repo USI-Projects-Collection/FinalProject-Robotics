@@ -61,6 +61,8 @@ class MockMapPublisher(Node):
         occ_cells = int(np.count_nonzero(grid == 100))
         self.get_logger().info(f"Occupancy cells set to 100: {occ_cells}")
 
+        self.go_again = True
+
         self.map = OccupancyGrid()
         self.map.header.frame_id = 'map'
         self.map.info.resolution = res
@@ -73,19 +75,18 @@ class MockMapPublisher(Node):
         self.map.data = grid.flatten().tolist()
 
         self.pub   = self.create_publisher(OccupancyGrid, '/map', 10) # mantieni in coda al massimo 1 messaggio”: se ne arriva un altro prima che il subscriber lo legga, il più vecchio viene scartato.
-        self.map_cb()
-        self.timer = self.create_timer(10.0, self.map_cb) # pubblica ogni 1s la mappa
+        self.timer = self.create_timer(1.0, self.map_cb) # pubblica ogni 1s la mappa
 
         self.pub_cmd   = self.create_subscription(Twist, '/rm0/cmd_vel', self._cmd_callback, 1)
         self.cmd_vel = None
-        self.current_tower = 2 # starting tower
+        self.current_tower = 1 # starting tower
         self.flag = False
+        # self.map_cb()
 
 
         # publisher to send goal pose at 10Hz
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 1)
         self.goal_timer = self.create_timer(2, self.publish_goal)
-        self.go_again = True
         self.receive_goal_again = self.create_subscription(Bool, '/go_again', self.go_again_cb, 1)
         self.goal_reached = False
         self.sub_goal_reached = self.create_subscription(Bool, '/goal_reached', self._goal_reached_cb, 1)
