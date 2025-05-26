@@ -6,16 +6,12 @@ from rclpy.node import Node
 from transforms3d._gohlketransforms import euler_from_quaternion
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 import math
-from geometry_msgs.msg import Twist, Pose
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Range
-from sensor_msgs.msg import Image
-from sensor_msgs.msg import ChannelFloat32
+from sensor_msgs.msg import Range, Image
 from std_msgs.msg import Bool
-import array
 import sys
 import itertools
-from std_msgs.msg import Bool
 
 
 class ControllerNode(Node):
@@ -31,19 +27,12 @@ class ControllerNode(Node):
 
         self.turn_ended = self.create_publisher(Bool, '/go_again', 10)
 
-
         # Create attributes to store odometry pose and velocity
         self.odom_pose = None
         self.odom_velocity = None
         
         # Create a publisher for the topic 'cmd_vel'
         self.vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
-
-        # Create a publisher for gimbal control using ChannelFloat32 instead of GimbalCommand
-        self.gimbal_publisher = self.create_publisher(ChannelFloat32, '/rm0/cmd_gimbal', 10)
-        
-        # Also create a publisher for gimbal engagement
-        self.gimbal_engage_publisher = self.create_publisher(Bool, '/rm0/gimbal/engage', 10)
         
         # Create a subscriber to the topic 'odom', which will call
         # self.odom_callback every time a message is received
@@ -89,16 +78,6 @@ class ControllerNode(Node):
         # For smoothing the transitions between sensors
         self.closest_distance = 10.0
         self.active_sensor = None
-
-        # Gimbal control variables - using ChannelFloat32
-        self.gimbal_rotated = False  # Track if the gimbal has been rotated
-        self.alignment_start_time = None  # Track when we entered align_to_shoot state
-        self.gimbal_rotation_started = False  # Track if we've started the gimbal rotation
-        self.gimbal_rotation_complete = False  # Track if the gimbal rotation has completed
-        self.gimbal_rotation_duration = 2.0  # Duration to apply rotation command in seconds
-
-        # Define constants for ChannelFloat32 gimbal control
-        self.GIMBAL_RATE_MODE = 1.0  # Assuming 1.0 represents RATE mode
         
         self.blaster_trans = np.array([0.20, 0, 0.2])
         self.seen_tower = False
@@ -186,39 +165,6 @@ class ControllerNode(Node):
         while angle < -math.pi:
             angle += 2.0 * math.pi
         return angle
-    
-    def set_gimbal_angle(self, yaw_speed, pitch_speed):
-        """
-        Control gimbal by setting angular speeds in degrees/second using ChannelFloat32.
-        
-        Args:
-            yaw_speed: Angular speed around yaw axis in degrees/second
-            pitch_speed: Angular speed around pitch axis in degrees/second
-        """
-        # Create ChannelFloat32 message
-        gimbal_cmd = ChannelFloat32()
-        gimbal_cmd.name = "gimbal_control"
-        
-        # Structure: [mode, yaw_speed, pitch_speed]
-        # Convert degrees/second to radians/second for consistency
-        values = [
-            self.GIMBAL_RATE_MODE,  # Mode (1.0 = RATE mode)
-            float(math.radians(yaw_speed)),  # Yaw in radians/second
-            float(math.radians(pitch_speed))  # Pitch in radians/second
-        ]
-        
-        gimbal_cmd.values = array.array('f', values)
-        
-        # Publish the message
-        self.gimbal_publisher.publish(gimbal_cmd)
-        self.get_logger().info(f"Setting gimbal speeds - yaw: {yaw_speed} deg/s, pitch: {pitch_speed} deg/s")
-        
-    def engage_gimbal(self, engage=True):
-        """Engage or disengage the gimbal motors."""
-        engage_msg = Bool()
-        engage_msg.data = engage
-        self.gimbal_engage_publisher.publish(engage_msg)
-        self.get_logger().info(f"{'Engaging' if engage else 'Disengaging'} gimbal motors")
     
     def check_tower_visibility(self, threshold):
         """Check if the tower is visible in the camera image."""
@@ -586,6 +532,7 @@ class ControllerNode(Node):
                     if self.align_ticks >= 3:
                         self.get_logger().info(f"Shooting -------------")
                         self.seen_tower = False
+                        self.align_ticks = 0
                         self.state = 'shoot_tower'
                     else:
                         self.align_ticks += 1
@@ -611,29 +558,6 @@ class ControllerNode(Node):
             self.turn_ended.publish(Bool(data=True))
             self.state = "find_tower"
             self.get_logger().info("Task completed!")
-
-
-        elif self.state == "align_to_shoot":
-            # Stop and prepare for shooting
-            cmd_vel.linear.x = 0.0
-            cmd_vel.angular.z = 0.0
-            
-            # Make gimbal rotate
-            if not self.gimbal_rotation_started:
-                self.gimbal_rotation_started = True
-                self.alignment_start_time = self.get_clock().now()
-                self.engage_gimbal(True)
-                self.set_gimbal_angle(90.0, 30.0)
-                self.get_logger().info("Gimbal rotation started")
-            elif self.gimbal_rotation_started and not self.gimbal_rotation_complete:
-                elapsed_time = (self.get_clock().now() - self.alignment_start_time).nanoseconds / 1e9
-                if elapsed_time >= self.gimbal_rotation_duration:
-                    self.gimbal_rotation_complete = True
-                    self.set_gimbal_angle(0.0, 0.0)
-                    self.engage_gimbal(False)
-                    self.state = "shoot_tower"
-                    self.get_logger().info("Gimbal rotation completed")
-
         
         self.vel_publisher.publish(cmd_vel)
     

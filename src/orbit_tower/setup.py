@@ -1,7 +1,7 @@
 from setuptools import setup
 from glob import glob
 
-package_name = 'assignment2'
+package_name = 'orbit_tower'
 
 setup(
     name=package_name,
@@ -23,9 +23,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'controller_node = assignment2.controller_node:main',
-            'controller_node_wall = assignment2.controller_node_wall:main',
-            'mapping_node = assignment2.mapping_node:main',
+            'controller_node = orbit_tower.controller_node:main',
         ],
     },
 )
