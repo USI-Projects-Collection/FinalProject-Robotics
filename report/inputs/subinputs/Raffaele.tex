@@ -1,5 +1,4 @@
 \subsubsection{System Overview}
-\subsubsection{System Overview}
 The tower detection and interaction system represents a sophisticated autonomous targeting solution. The system integrates multiple sensor modalities including range sensors, RGB camera, and odometry to enable a mobile robot to autonomously locate, approach, orbit, and engage tower targets in a dynamic environment.
 The core architecture follows a finite state machine approach with six primary operational states: \textit{find\_tower}, \textit{position\_for\_orbit}, \textit{orbit\_tower}, \textit{avoid\_obstacle}, \textit{align\_tower}, and \textit{shoot\_tower}. This state-based design ensures robust behavior transitions and clear operational logic flow through well-defined transition criteria and sensor-based decision making.
 The main control loop executes at 60 Hz, providing real-time responsiveness while maintaining computational efficiency. \\
