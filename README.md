@@ -27,20 +27,20 @@ source install/setup.[bash|zsh]
 ⁠ros2 launch orbit_tower controller.launch name:=/rm0
 ```
 
-# Maps of the topics used in the project
-| Funzione     | Topic               | Type                        | Publisher                | User          |
+| Function     | Topic               | Type                        | Publisher                | User          |
 | ------------ | ------------------- | --------------------------- | ------------------------ | ------------- |
-| Mappa 2-D    | `/map`              | `nav_msgs/OccupancyGrid`    | MockMapPublisher         | Planner       |
-| Pose attuale | `/odom`             | `nav_msgs/Odometry`         | Robo (sim)               | Planner       |
-| Posa corrente| `/current_pose`     | `geometry_msgs/PoseStamped` | Planner                  | Robot         |
+| 2D Map       | `/map`              | `nav_msgs/OccupancyGrid`    | MockMapPublisher         | Planner       |
+| Current pose | `/odom`             | `nav_msgs/Odometry`         | Robo (sim)               | Planner       |
+| Current pose | `/current_pose`     | `geometry_msgs/PoseStamped` | Planner                  | Robot         |
 | Goal         | `/goal_pose`        | `geometry_msgs/PoseStamped` | MockMapPublisher / RViz  | Planner       |
-| Traiettoria  | `/plan`             | `nav_msgs/Path`             | Planner                  | (debug)       |
-| Comandi vel  | `/rm0/cmd_vel`      | `geometry_msgs/Twist`       | Planner                  | Robot         |
-| Goal raggiunto| `/goal_reached`    | `std_msgs/Bool`             | Planner                  | MockMapPublisher |
-| Riprendi path| `/go_again`         | `std_msgs/Bool`             | MockMapPublisher         | Planner       |
-| Velocità     | `/cmd_vel`          | `geometry_msgs/Twist`       | ControllerNode           | Robo          |
-| Immagini     | `/rm0/camera/image_color` | `sensor_msgs/Image`   | Robo (sim)               | ControllerNode |
-| Rilevamento  | `/rm0/range_[0-3]`  | `sensor_msgs/Range`         | Robo (sim)               | ControllerNode |
+| Trajectory   | `/plan`             | `nav_msgs/Path`             | Planner                  | (debug)       |
+| Velocity commands | `/rm0/cmd_vel` | `geometry_msgs/Twist`       | Planner                  | Robot         |
+| Goal reached | `/goal_reached`     | `std_msgs/Bool`             | Planner                  | MockMapPublisher |
+| Resume path  | `/go_again`         | `std_msgs/Bool`             | MockMapPublisher         | Planner       |
+| Velocity     | `/cmd_vel`          | `geometry_msgs/Twist`       | ControllerNode           | Robo          |
+| Images       | `/rm0/camera/image_color` | `sensor_msgs/Image`   | Robo (sim)               | ControllerNode |
+| Detection    | `/rm0/range_[0-3]`  | `sensor_msgs/Range`         | Robo (sim)               | ControllerNode |
+
 
 
 ## Example of publishing topics to move the robot
