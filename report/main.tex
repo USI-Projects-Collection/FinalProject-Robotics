@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[twocolumn]{article}
 \usepackage{listings}
 \usepackage{booktabs}
 \usepackage{here}
@@ -8,8 +8,17 @@
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{siunitx} % Required for the \num command
+\usepackage{float}
 
 \newcommand{\code}[1]{{\tt #1}}
+
+\makeatletter
+\newcommand{\subsubsubsection}[1]{%
+  % Slightly smaller font and forced line break
+  {\small\bfseries #1\par}%
+  \vspace{0.5\baselineskip}%
+}
+\makeatother
 
 % decreas margin size
 \usepackage[margin=0.7in]{geometry}
@@ -40,25 +49,31 @@
 	Raffaele Perri (\text{raffaele.perri@usi.ch})\\
 	\url{https://github.com/USI-Projects-Collection/FinalProject-Robotics.git}
 	}
-
-
 \begin{document}
-\maketitle
+\begin{titlepage}
+    \begin{center}
+        \textsc{Robotics SP 2025\\
+        Universit\`a della Svizzera italiana}\\[1ex]
+        
+        \rule{\linewidth}{0.5pt}\\[1ex]
+        {\huge Tower Dropper\\[0.5ex]
+        \small Group Z}\\[1ex]
+        \rule{\linewidth}{1pt}\\[2ex]
 
-\tableofcontents
+        \normalsize
+        Paolo Deidda (\texttt{paolo.deidda@usi.ch})\\
+        Francesco Costa (\texttt{francesco.costa@usi.ch})\\
+        Raffaele Perri (\texttt{raffaele.perri@usi.ch})\\[1ex]
+        \url{https://github.com/USI-Projects-Collection/FinalProject-Robotics.git}
+    \end{center}
 
-% \vspace{50pt}
-% \rule{\linewidth}{0.5pt}
+    \vspace{2em}
+    \tableofcontents
 
-\vspace*{\fill}
-
-\subsection*{Setup}
-
-To run the code follow the setup and execution instructions provided in the \texttt{README.md} file included in this repository.
-
-
-\newpage
-
+    \vfill
+    \subsection*{Setup}
+    To run the code follow the setup and execution instructions provided in the \texttt{README.md} file included in this repository.
+\end{titlepage}
 
 % ====================================================================
 \section{Introduction}\label{sec:intro}

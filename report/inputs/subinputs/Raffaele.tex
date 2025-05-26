@@ -1,4 +1,139 @@
-\subsubsection{Trajectory Generator \& Control Law}
-\subsubsection{Implementation Details}
-\subsubsection{Tests \& Metrics}
-\subsubsection{Challenges Encountered \& Fixes}
+\subsubsection{System Overview}
+\subsubsection{System Overview}
+The tower detection and interaction system represents a sophisticated autonomous targeting solution. The system integrates multiple sensor modalities including range sensors, RGB camera, and odometry to enable a mobile robot to autonomously locate, approach, orbit, and engage tower targets in a dynamic environment.
+The core architecture follows a finite state machine approach with six primary operational states: \textit{find\_tower}, \textit{position\_for\_orbit}, \textit{orbit\_tower}, \textit{avoid\_obstacle}, \textit{align\_tower}, and \textit{shoot\_tower}. This state-based design ensures robust behavior transitions and clear operational logic flow through well-defined transition criteria and sensor-based decision making.
+The main control loop executes at 60 Hz, providing real-time responsiveness while maintaining computational efficiency. \\
+Key ROS2 topics include velocity commands (\texttt{cmd\_vel}), odometry data (\texttt{odom}), individual range sensor readings (\texttt{/rm0/range\_{0-3}}), and camera imagery (\texttt{/rm0/camera/image\_color}).
+\subsubsection{Sensor Integration and Data Processing}
+\subsubsection*{Range Sensor Configuration and Calibration}
+The system utilizes four range sensors positioned strategically around the robot platform to provide environmental awareness (as shown in Figure~\ref{fig:robot_model}).\\
+Each sensor operates through dedicated ROS2 subscribers that continuously update distance measurements at the sensor's native frequency. The system implements sensor fusion by maintaining a real-time comparison between multiple sensor readings to determine the most reliable distance measurements and detect sensor failures or environmental interference.
+Readings exceeding 10 meters are considered invalid and replaced with the maximum range value. The system also implements a smoothing algorithm to reduce measurement noise:
+\begin{align}
+d_{filtered}(t) = \alpha \cdot d_{raw}(t) + (1-\alpha) \cdot d_{filtered}(t-1)
+\end{align}
+where $\alpha = 0.8$ provides a balance between responsiveness and stability.
+\subsubsection*{Computer Vision System Architecture}
+The vision system employs a comprehensive computer vision pipeline optimized for real-time tower detection and tracking. The process begins with image acquisition from the robot's RGB camera, followed by color space conversion and multi-stage filtering.\\
+\textbf{Color Space Processing:}
+The system converts incoming BGR images to HSV color space to achieve robust color-based detection under varying lighting conditions. HSV provides superior color constancy compared to RGB, particularly important for outdoor or variable lighting scenarios.\\
+\textbf{Multi-Range Color Filtering:} To account for the bimodal distribution of red pixels in HSV space, the system implements dual-range thresholding:
+\begin{align}
+    \text{Mask}_1 &= \text{inRange}(\text{HSV}, [0, 100, 100], [10, 255, 255]) \\
+    \text{Mask}_2 &= \text{inRange}(\text{HSV}, [160, 100, 100], [179, 255, 255]) \\
+    \text{Mask}_{final} &= \text{Mask}_1 \cup \text{Mask}_2
+\end{align}
+This approach captures both low-end ($0-10$°) and high-end ($160-179$°) red hues while maintaining robust detection across different illumination conditions.\\
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.2\textwidth]{Images/mask.jpg}
+    \caption{Multi-range color filtering process for red tower detection.}
+    \label{fig:masking}
+\end{figure}
+\textbf{Tower Position Calculation:}
+The system calculates tower position using spatial moments of the binary mask:
+\begin{align}
+M_{pq} &= \sum_{x,y} x^p y^q \cdot \text{Mask}(x,y) \quad C_x = \frac{M_{10}}{M_{00}} \\
+p_{tower} &= \frac{C_x - W/2}{W/2}
+\end{align}
+where $M_{pq}$ represents the $(p,q)$-th moment, $C_x$ is the centroid x-coordinate, $W$ is the image width, and $p_{tower} \in [-1,1]$ represents the normalized tower position.\\
+\textbf{Tower Visibility Assessment:}
+The system implements a visibility metric based on the ratio of red pixels to total image pixels:
+\begin{align}
+R_{red} = \frac{\sum_{x,y} \text{Mask}_{final}(x,y)}{W \times H}
+\end{align}
+Tower visibility is confirmed when $R_{red} > \tau_{visibility}$, where the threshold $\tau_{visibility}$ is dynamically adjusted based on environmental conditions and historical detection performance.
+\subsubsection{State Machine Implementation and Control Logic}
+\subsubsection*{State Transition Architecture}
+The finite state machine implementation employs a hierarchical structure with clearly defined transition conditions and state-specific behaviors (Figure~\ref{fig:state_diagram}). Each state maintains internal variables for tracking progress and implementing timeouts to prevent infinite loops or deadlock conditions.
+State transitions are triggered by combinations of sensor readings, timing constraints, and task completion flags. The system implements hysteresis in transition conditions to prevent oscillation between states due to sensor noise or borderline threshold conditions.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{Images/state_diagram.png}
+    \caption{Robot state machine diagram illustrating the tower detection and interaction workflow.}
+    \label{fig:state_diagram}
+\end{figure}
+\subsubsection*{Tower Discovery Phase: \textit{find\_tower} State}
+The robot executes counterclockwise rotation at $\omega_{search} = 0.5$ rad/s while continuously monitoring the front-right range sensor (Range\_1). This angular velocity provides optimal balance between search speed and sensor update rates, ensuring no potential targets are missed during rotation.
+\textbf{Detection Criteria:}
+Tower detection occurs when the front-right sensor measurement satisfies:
+\begin{align}
+d_{Range1} \leq d_{target} + \delta_{tolerance}
+\end{align}
+where $d_{target} = 2.0$ meters represents the desired orbital radius and $\delta_{tolerance} = 0.1$ meters provides measurement uncertainty accommodation.\\
+\textbf{Multi-Sensor Validation:}
+Upon initial detection, the system performs cross-validation using adjacent sensors to confirm target authenticity and eliminate false positives from environmental artifacts or sensor noise. The validation process requires consistent readings across multiple sensor cycles to prevent premature state transitions.
+\subsubsection*{Orbital Positioning Phase: \textit{position\_for\_orbit} State}
+This critical state ensures proper spatial relationship between robot and tower before initiating orbital maneuvers.
+\textbf{Geometric Positioning Strategy:}
+The system executes a controlled rotation to position the detected tower relative to the robot's right side, enabling subsequent left-side orbital motion. The positioning maneuver uses angular velocity $\omega_{position} = 0.5$ rad/s while monitoring the back-right sensor (Range\_0).\\
+\textbf{Position Validation Criteria:}
+Successful positioning requires the back-right sensor to detect the tower within acceptable bounds:
+\begin{align}
+d_{Range0} \leq d_{target} + \delta_{position}
+\end{align}
+where $\delta_{position} = 0.5$ meters provides sufficient tolerance for initial orbital entry while maintaining proximity to the target distance.\\
+\textbf{Timeout and Recovery Mechanisms:}
+The state implements timeout protection to prevent infinite positioning attempts. If positioning cannot be achieved within a predetermined time window, the system reverts to the search state with modified search parameters.
+\subsubsection*{Orbital Navigation Control: \textit{orbit\_tower} State}
+The orbital control system represents the most sophisticated aspect of the navigation architecture, combining multiple control loops for stable circular motion around the detected tower.\\
+\textbf{Multi-Loop Control Architecture:}
+The orbital controller implements two primary control loops operating in parallel:
+\begin{enumerate}
+\item \textbf{Distance Regulation Loop}: Maintains constant radial distance using range sensor feedback
+\item \textbf{Angular Tracking Loop}: Centers tower in camera field of view using vision feedback
+\end{enumerate}
+\textbf{Distance Control Implementation:}
+The distance regulation employs PID control with anti-windup protection:
+\begin{align}
+e_d(t) &= d_{measured} - d_{target} \\
+u_d(t) &= K_p e_d(t) + K_i \int_{t_0}^t e_d(\tau) d\tau + K_d \frac{de_d(t)}{dt}
+\end{align}
+The integral term includes saturation limits to prevent windup:
+\begin{align}
+\int_{t_0}^t e_d(\tau) d\tau = \begin{cases}
+I_{\max} & \text{if } \int e_d(\tau) d\tau > I_{\max} \\
+I_{\min} & \text{if } \int e_d(\tau) d\tau < I_{\min} \\
+\int e_d(\tau) d\tau & \text{otherwise}
+\end{cases}
+\end{align}
+where $I_{\max} = 5.0$ and $I_{\min} = -5.0$ prevent excessive integral buildup.\\
+\textbf{Velocity Coordination:}
+The orbital motion combines base velocities with correction terms from both control loops:
+\begin{align}
+v_{linear} &= v_{base} \cdot f_{distance}(e_d) \
+\omega_{angular} &= \omega_{base} + \alpha \cdot u_d + \beta \cdot p_{tower}
+\end{align}
+where:
+\begin{align}
+f_{distance}(e_d) = \begin{cases}
+0.8 & \text{if } e_d > 0.2 \text{ (too far)} \\
+1.2 & \text{if } e_d < -0.2 \text{ (too close)} \\
+1.0 & \text{otherwise}
+\end{cases}
+\end{align}
+The velocity adaptation function $f_{distance}$ provides reactive speed adjustments based on distance error magnitude, enhancing convergence to the target orbital radius.
+The system implements comprehensive velocity limiting to ensure safe operation:
+$v_{linear} \in [0.05, 0.3] \text{ m/s}$
+$\omega_{angular} \in [-\infty, -0.1] \text{ rad/s}$.
+The angular velocity constraint ensures consistent counterclockwise motion while preventing excessive rotation rates that could destabilize the orbital behavior.
+\subsubsection*{Obstacle Avoidance Protocol: \textit{avoid\_obstacle} State}
+The obstacle avoidance system implements a dual-objective navigation strategy that maintains safe distances from obstacles while preserving awareness of the primary tower target.\\
+\textbf{Obstacle Detection and Classification:}
+Obstacle detection triggers when front sensors detect objects within the critical threshold.\\
+\textbf{Secondary Orbital Behavior:}
+Upon obstacle detection, the system initiates a secondary orbital pattern around the detected obstacle using the back-left sensor (Range\_2) for guidance.\\
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\textwidth]{Images/obstacle_avoidance.png}
+    \caption{Robot avoiding the top obstacle encountered during orbital navigation.}
+    \label{fig:avoid_obstacle}
+\end{figure}
+\textbf{Return Navigation Logic:}
+The system implements logic for returning to the primary tower after obstacle avoidance.
+The return condition requires:
+\begin{align}
+(d_{Range2} > d_{clearance}) \land (d_{Range0} < d_{tower,\max}) \land \\
+\text{flag}_{almost\_avoided}
+\end{align}
+where $d_{clearance} = 10.0$ meters indicates obstacle clearance and $\text{flag}_{almost\_avoided}$ prevents premature return attempts.

@@ -1,4 +1,35 @@
-\subsubsection{Sensing \& Scoring Function}
-\subsubsection{Ballistic Model / Actuation Timing}
-\subsubsection{Tests \& Metrics}
-\subsubsection{Challenges Encountered \& Fixes}
+\subsubsection{Tower Alignment and Targeting System}
+\subsubsection{Alignment Detection}
+\textbf{TO WRITE}
+\subsubsection*{Sensor-Based Geometric Validation}
+To complement vision-based alignment, the system implements sensor-based geometric validation using bilateral range measurements.
+\textbf{Symmetry Detection:}
+The alignment validation compares readings from left and right range sensors:
+\begin{align}
+\Delta_{symmetry} = |d_{Range1} - d_{Range3}|
+\end{align}
+Perfect alignment is achieved when:
+\begin{align}
+\Delta_{symmetry} < \epsilon_{symmetry}
+\end{align}
+where $\epsilon_{symmetry}$ represents the allowable measurement tolerance for symmetric positioning.
+\textbf{Iterative Alignment Process:}
+The alignment process follows a systematic approach:
+\begin{enumerate}
+\item \textbf{Initial Rotation}: Controlled rotation at $\omega_{align} = -0.3$ rad/s to scan for geometric variations
+\item \textbf{Asymmetry Detection}: Continuous monitoring of range sensor differences to identify tower edges
+\item \textbf{Symmetry Convergence}: Fine positioning adjustments to achieve bilateral sensor equality
+\item \textbf{Alignment Confirmation}: Final validation using both vision and sensor criteria
+\end{enumerate}
+\subsubsection*{State Transition Logic and Validation}
+The transition from alignment to shooting state requires satisfaction of multiple criteria:
+\begin{align}
+\text{Aligned} = (&AR > \tau_{aspect}) \land (\Delta_{symmetry} < \epsilon_{symmetry}) \\
+&\land (\text{tower\_visible}) \land (\text{stable\_for} > t_{stabilization})
+\end{align}
+where $t_{stabilization}$ ensures the robot maintains alignment for sufficient duration before engagement.
+\subsubsection*{Projectile Launch System}
+The \textit{shoot\_tower} state executes the engagement sequence through integration with the CoppeliaSim physics engine. The system calculates projectile spawn position using coordinate transformation:
+\begin{align} \mathbf{R} &= \begin{bmatrix} \cos(\psi) & -\sin(\psi) & 0 \\ \sin(\psi) & \cos(\psi) & 0 \\ 0 & 0 & 1 \end{bmatrix} \\ \mathbf{p}_{projectile} &= \mathbf{p}_{robot} + \mathbf{R} \cdot \mathbf{t}_{blaster} \end{align}
+where $\psi$ represents the robot's yaw angle and $\mathbf{t}_{blaster} = [0.20, 0, 0.2]^T$ meters defines the blaster offset from the robot center.
+The projectile receives initial velocity $\mathbf{v}_{projectile} = \mathbf{R} \cdot [3.0, 0.0, 3.0]^T$ m/s, providing forward momentum with upward trajectory compensation for ballistic flight.
