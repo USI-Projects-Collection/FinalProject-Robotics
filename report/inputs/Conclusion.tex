@@ -1,5 +1,12 @@
 \subsection{Potential Improvements}
 % Ideas we prototyped or discussed but did not implement.
+In conclusion, while the project successfully implements all goal behaviors, there are a number of possible improvements which could be done to it:
+\begin{itemize}
+    \item First and foremost additional work could be done to improve robustness of the system. In its current state the control of the robot is in fact limited to certain parameters, such as the static definition of the scene (position of the towers and obstacles). Additionally, both avoidance of obstacles and weak-spot detection don't take into consideration certain edge cases we decided to purposely avoid (obstacles too close to the tower and situations in which the robot orbits too close to it). 
+    \item Regarding the exploration of the environment we make use of path planning to find the position of all target towers without the use of sensors (visual or distance). A more advanced solution could employ the use of said sensors and dynamically map the environment around the robot, making it possible to generate almost randomly the scenes.
+    \item Finally, with the current implementation we are not making use of the moveable gimbal supporting the turret. It could be possible through its functionalities to improve the detection and tracking of the towers, leading to a more natural and satisfying result. This would completely remove the need to realign the robot to the tower after the flat side is detected.
+\end{itemize} 
 
 \subsection{Unexplored Ideas}
 % Out‑of‑scope concepts for future work.
+Given the very general description of the problem there are also a number of possible unexplored ideas which could fuel future projects. One such idea would be to include multiple robots in the scene (instead of towers) and have them target each other in an all out brawl. The physics engine provided with CoppeliaSim would allow for an extremely satisfying simulation. It could also be possible to think of a situation where the robot is not moving (or barely) and the focus is instead on the control of the mounted turret, which would need to follow moving targets and predict their trajectory before shooting projectiles at them.

@@ -1,3 +1,12 @@
+The goal of this project was to control a robot with the objective of knocking towers to the ground through the action of a mounted turret. A successful implementation of such a system requires a number of different individual task, including:
+\begin{itemize}
+    \item Exploration of the environment with the goal of finding the towers
+    \item Detection of the tower and of its weak-spot 
+    \item Alignment with the tower
+    \item Simulation of the shooting process
+\end{itemize}
+All of these different problems required diverse solutions and brought distinct difficulties, making the project challenging but all the more rewarding.
+
 \subsection{Model and Scene}
 The project use a RobomasterS1 robot model, with the addition of four proximity sensors, placed respectively (Figure~\ref{fig:robot_model}):
 \begin{itemize}
@@ -13,5 +22,13 @@ The project use a RobomasterS1 robot model, with the addition of four proximity 
     \label{fig:robot_model}
 \end{figure}
 The robot is equipped with a camera (\texttt{/rm0/camera/image\_color}) used for visual processing tasks, such as weak-spot detection and tower identification.\\
-The scene is constructed with a 3D model of the RobomasterS1 robot placed in the center of a flat terrain. The environment includes four towers, each colored in red to indicate that they are active and can be targeted. The towers are positioned at the corners of the scene (\text{ADD SOME OTHER DETAILS ABOUT THE SCENE}).\\
-\textbf{ADD A PICTURE OF THE SCENE HERE.}\\
+The scene is constructed with a 3D model of the RobomasterS1 robot placed in the center of a flat terrain. The environment includes four towers, each colored in red to indicate that they are active and can be targeted. The towers are positioned at the corners of the scene. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.2\textwidth]{Images/scene.png}
+    \caption{Scene depicting environment.}
+    \label{fig:scene}
+\end{figure}
+
+Additionally there is a white pillar resembling a tower which is used to showcase the obstacle avoidance capabilities of the robot. 
