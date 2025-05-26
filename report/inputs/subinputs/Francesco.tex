@@ -1,8 +1,8 @@
-\subsubsection*{Tower Alignment and Targeting System}
+\subsubsection{Tower Alignment and Targeting System}
 The system requires alignment algorithm to be used in order to detect the weak side of the tower which, when working with rectangular bases, simply equates to the largest side. The problem could easily be solved by coloring different sides of the tower or by including a special mark on the target side. This solution would harm the implementation on the long run, as we would always be forced to explicitely distinguish sides by altering the visual properties of towers, leading to more constrained and less realistic results.
-\subsubsection*{Alignment Detection}
+\subsubsection{Alignment Detection}
 The method we developed to detect the weak side of the tower makes use of the binary mask already in use to assess the position of the tower. In this case we take advantage of the discretization limits of pixels. The easiest, and surprisingly reliable, method to detect whether the robot is looking at a flat face of the tower relies in fact on the distribution of colored pixels in the mask, in particular around the base of the tower. If the number of continuous colored pixels in the first row of the mask containing any non-black pixel (starting from the bottom) is around as high as the highest number of continous pixels in a row of the mask, we can confidently say we are looking at a flat face of the tower. Visually this would mean that in the binary mask we see a sharp edge at the bottom of the tower, instead of a 'pixelated' line.
-\subsubsection*{Sensor-Based Geometric Validation}
+\subsubsection{Sensor-Based Geometric Validation}
 Once the robot is confident of being parallel to the largest side of the tower we follow an iterative process in order to turn the robot until it looks straight towards its target. The alignment process follows a systematic approach:
 \begin{enumerate}
 \item \textbf{Initial Rotation}: Controlled rotation at $\omega_{align} = -0.3$ rad/s to scan for geometric variations
@@ -10,7 +10,7 @@ Once the robot is confident of being parallel to the largest side of the tower w
 \item \textbf{Symmetry Convergence}: Fine positioning adjustments to achieve bilateral sensor equality
 \item \textbf{Alignment Correction}: Final correction of the alignment following rotation direction
 \end{enumerate}
-\subsubsection*{Projectile Launch System}
+\subsubsection{Projectile Launch System}
 The \textit{shoot\_tower} state executes the engagement sequence through integration with the CoppeliaSim physics engine. The system calculates projectile spawn position using coordinate transformation:
 \begin{align} \mathbf{R} &= \begin{bmatrix} \cos(\psi) & -\sin(\psi) & 0 \\ \sin(\psi) & \cos(\psi) & 0 \\ 0 & 0 & 1 \end{bmatrix} \\ \mathbf{p}_{projectile} &= \mathbf{p}_{robot} + \mathbf{R} \cdot \mathbf{t}_{blaster} \end{align}
 where $\psi$ represents the robot's roll angle and $\mathbf{t}_{blaster} = [0.2, 0, 0.2]^T$ meters defines the blaster offset from the robot center.
