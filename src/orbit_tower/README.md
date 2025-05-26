@@ -31,7 +31,7 @@ ros2 launch robomaster_ros ep.launch name:=/rm0
 
 - On a third terminal run:
 cd <path_to_root_of_the_package>
-ros2 launch assignment2 controller.launch name:=/rm0
+ros2 launch orbit_tower controller.launch name:=/rm0
 
 - Link to the video: https://drive.google.com/file/d/120rBB7-HCTBpsSvf9seu4iQ1YGjopTAy/view?usp=drive_link
 
@@ -49,10 +49,10 @@ In coppelia -> File -> Load model -> select the model `src/robomaster_example/mo
 
 - On a second terminal run:
 cd <path_to_root_of_the_package>
-ros2 launch assignment2 ep_tof.launch name:=/rm0
+ros2 launch orbit_tower ep_tof.launch name:=/rm0
 
 - On a third terminal run:
 cd <path_to_root_of_the_package>
-ros2 launch assignment2 standard.launch name:=/rm0
+ros2 launch orbit_tower standard.launch name:=/rm0
 
 - Link to the video: https://drive.google.com/file/d/1-l6Upyxq00uQgIKbRyeGvhQN9l0uFtkn/view?usp=drive_link

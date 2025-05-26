@@ -8,18 +8,18 @@ git clone --recurse-submodules https://github.com/USI-Projects-Collection/FinalP
 ```bash
 colcon build --symlink-install
 source install/setup.[bash|zsh]
-pixi run coppelia src/assignment2/scenes/final_scene_without_obstacles.ttt
+pixi run coppelia src/orbit_tower/scenes/final_scene_without_obstacles.ttt
 ```
 ### Terminal2
 ```bash
 source install/setup.[bash|zsh]
-⁠ros2 launch assignment2 s1.launch name:=/rm0
+⁠ros2 launch orbit_tower s1.launch name:=/rm0
 ```
 
 ### Terminal3
 ```bash
 source install/setup.[bash|zsh]
-⁠ros2 launch assignment2 controller.launch name:=/rm0
+⁠ros2 launch orbit_tower controller.launch name:=/rm0
 ```
 
 
