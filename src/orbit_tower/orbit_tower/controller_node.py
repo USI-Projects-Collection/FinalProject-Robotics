@@ -529,7 +529,7 @@ class ControllerNode(Node):
                     cmd_vel.angular.z = -0.3
                     self.get_logger().info(f"Spinning -------------")
                 else:
-                    if self.align_ticks >= 3:
+                    if self.align_ticks >= 4:
                         self.get_logger().info(f"Shooting -------------")
                         self.seen_tower = False
                         self.align_ticks = 0
