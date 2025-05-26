@@ -1,3 +1,18 @@
+\subsection{Integration Strategy and Version Control}
+
+From the very beginning, the team adopted a modular approach, assigning each collaborator one of three distinct modules to optimize parallel development; the modules were then integrated via ROS topic communication channels to determine the current state of the robot.
+
+\paragraph{Launch Files \& Node Orchestration.}
+A single composable launch file (`system.launch.py`) instantiates the three nodes and wires the remappings shown in Table~\ref{tab:channels}. This guarantees that every developer runs the exact same graph with one command:
+\begingroup\small
+\begin{verbatim}
+ros2 launch orbit_tower s1.launch name:=/rm0
+\end{verbatim}
+\endgroup
+
+\paragraph{Git Workflow}
+The repository uses a single protected \texttt{main} branch. Collaborators create feature branches off of \texttt{main}, naming them as \texttt{<username>/<keyword>} to indicate the task or feature under development. Once work is complete, changes are merged back into \texttt{main} via pull requests.
+
 \subsection{ROS 2 Node Graph \& Communication Channels}
 The communication between the three ROS2 nodes in the system — \texttt{MockMapPublisher}, \texttt{PathPlannerNode}, and \texttt{ControllerNode} — is established through various ROS topics. Here's an overview of their coordination logic:\\
 At initialization, the \texttt{MockMapPublisher} and \texttt{PathPlannerNode} nodes sets the internal flag \texttt{self.go\_again = True} and the \texttt{ControllerNode} sets \texttt{self.goal\_reached = False}.
@@ -41,26 +56,6 @@ This design ensures that the map publisher and planner are event-driven and coor
   \label{tab:channels}
 \end{table*}
 
-\subsection{Integration Strategy and Version Control}
-\paragraph{Launch Files \& Node Orchestration.}
-A single composable launch file (`system.launch.py`) instantiates the three nodes and wires the remappings shown in Table~\ref{tab:channels}. This guarantees that every developer runs the exact same graph with one command:
-\begingroup\small
-\begin{verbatim}
-ros2 launch final_project system.launch.py sim:=true
-\end{verbatim}
-\endgroup
-
-\paragraph{Git Workflow.}
-The project lives in a mono‑repository on GitHub. We follow a trunk‑based strategy:
-\begin{itemize}
-  \item \texttt{main} — always buildable; protected, fast‑forward merges only.
-  \item \texttt{feat/\*} — short‑lived feature branches that merge via PR once CI passes.
-  \item \texttt{hotfix/\*} — emergency patches cherry‑picked into a tag and back‑merged into \texttt{main}.
-\end{itemize}
-Code style is enforced by a pre‑commit hook running \texttt{clang‑format} and \texttt{ruff}. Continuous Integration (\texttt{colcon build ‑‑packages‑select all}) and unit tests run in GitHub Actions on every push.
-
-\paragraph{Versioning of Third‑Party Assets.}
-Simulation worlds (`.ttt`) and large bag files are stored in Git LFS, keeping the main repository lightweight while ensuring reproducibility.
 
 \subsection{Observed Failure Modes \& Mitigations}
 \begin{enumerate}
