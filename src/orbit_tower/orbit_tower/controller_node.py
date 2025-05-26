@@ -39,10 +39,10 @@ class ControllerNode(Node):
         self.odom_subscriber = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
         
         # Subscribe to the individual range sensors
-        self.front_right_range_sub = self.create_subscription(Range, '/rm0/range_1', self.scan_range1_callback, 10)
-        self.front_left_range_sub = self.create_subscription(Range, '/rm0/range_3', self.scan_range3_callback, 10)
         self.back_right_range_sub = self.create_subscription(Range, '/rm0/range_0', self.scan_range0_callback, 10)
+        self.front_right_range_sub = self.create_subscription(Range, '/rm0/range_1', self.scan_range1_callback, 10)
         self.back_left_range_sub = self.create_subscription(Range, '/rm0/range_2', self.scan_range2_callback, 10)
+        self.front_left_range_sub = self.create_subscription(Range, '/rm0/range_3', self.scan_range3_callback, 10)
         
         # Add attributes to store sensor readings
         self.range_0 = 10.0  # back right
@@ -247,27 +247,6 @@ class ControllerNode(Node):
             if visualize_mask.any():
                 cv2.imshow("Mask", visualize_mask)
                 cv2.waitKey(1)
-
-            # METHOD 1
-            # Analyze tower shape to detect if facing a complete side
-            # Find contours of the tower
-            # contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            # max_row, width_color = self.get_maximum_width(visualize_mask)
-            # if contours:
-            #     # Get the largest contour (the tower)
-            #     largest_contour = max(contours, key=cv2.contourArea)
-                
-            #     # Calculate bounding rectangle
-            #     x, y, w, h = cv2.boundingRect(largest_contour)
-                
-            #     # Calculate aspect ratio (width/height)
-            #     aspect_ratio = w / h if h > 0 else 0
-
-            #     # Check if robot is facing a complete side of the tower
-            #     if aspect_ratio > 0.5:
-            #         # Tower is facing the robot
-            #         self.get_logger().info("Tower is facing the robot")
-            #         self.state = "align_tower"
             
             # METHOD 2
             max_row, width_color = self.get_maximum_width(visualize_mask)
@@ -555,9 +534,9 @@ class ControllerNode(Node):
 
             self.shoot_projectile(projectile_pos, velocity)
             self.goal_reached = False
-            self.turn_ended.publish(Bool(data=True))
             self.state = "find_tower"
             self.get_logger().info("Task completed!")
+            self.turn_ended.publish(Bool(data=True))
         
         self.vel_publisher.publish(cmd_vel)
     

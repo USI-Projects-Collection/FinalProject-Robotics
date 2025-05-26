@@ -24,7 +24,7 @@ class PathPlannerNode(Node):
         # -- path following --
         self.path_points   = []     # list[(x, y)] in world coords
         self.lookahead     = 0.25   # [m] look‑ahead distance for pure‑pursuit
-        self.waypoint_tol  = 0.4   # [m] stop this far before hitting the tower
+        self.waypoint_tol  = 0.2   # [m] stop this far before hitting the tower
         self.max_lin       = 0.25   # [m/s]
         self.max_ang       = 1.5    # [rad/s]
 
@@ -49,8 +49,13 @@ class PathPlannerNode(Node):
 
     def go_again_cb(self, msg):
         if msg.data:
+            # reset planner state so we are ready for the next tower
             self.go_again = True
-            self.get_logger().info("Path planner back on track...")
+            self.goal_pose = None
+            self.path_points.clear()
+            self.pub_cmd.publish(Twist())  # make sure the robot is stopped
+            self.get_logger().info("Path planner re‑enabled – waiting for the next goal")
+            
     # ---------- callback ----------
     def map_cb(self, msg):
         if not self.go_again:
@@ -111,6 +116,7 @@ class PathPlannerNode(Node):
                 self.get_logger().info('Goal pose raggiunto — smetto di ripianificare')
                 self.goal_pose = None
         self.get_logger().info(f'Odometria ricevuta: x = {self.current_pose.position.x}, y = {self.current_pose.position.y}')
+
 
         # ----- follow current path -----
         if self.path_points:
