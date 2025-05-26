@@ -6,18 +6,23 @@ git clone --recurse-submodules https://github.com/USI-Projects-Collection/FinalP
 # How to run the project:
 ## Terminal1
 ```bash
+pixi install 
+pixi shell
 colcon build --symlink-install
 source install/setup.[bash|zsh]
 pixi run coppelia src/orbit_tower/scenes/final_scene_without_obstacles.ttt
 ```
+(in case the package coppeliasim_zmqremoteapi_client isn't being added correctly manually add it with pixi add)
 ## Terminal2
 ```bash
+pixi shell
 source install/setup.[bash|zsh]
 ⁠ros2 launch orbit_tower s1.launch name:=/rm0
 ```
 
 ## Terminal3
 ```bash
+pixi shell
 source install/setup.[bash|zsh]
 ⁠ros2 launch orbit_tower controller.launch name:=/rm0
 ```
@@ -38,7 +43,7 @@ source install/setup.[bash|zsh]
 | Rilevamento  | `/rm0/range_[0-3]`  | `sensor_msgs/Range`         | Robo (sim)               | ControllerNode |
 
 
-## Esempio di pubblicazione dei topic per direzionare il robot
+## Example of publishing topics to move the robot
 ros2 topic pub --once /current_pose geometry_msgs/PoseStamped \
 "{header:{frame_id: map}, pose:{position:{x: -1.5, y: -1.5, z: 0.0}, orientation:{w: 1.0}}}"
 
