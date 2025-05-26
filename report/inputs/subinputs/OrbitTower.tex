@@ -17,11 +17,13 @@ The vision system employs a comprehensive computer vision pipeline optimized for
 \textbf{Color Space Processing:}
 The system converts incoming BGR images to HSV color space to achieve robust color-based detection under varying lighting conditions. HSV provides superior color constancy compared to RGB, particularly important for outdoor or variable lighting scenarios.\\
 \textbf{Multi-Range Color Filtering:} To account for the bimodal distribution of red pixels in HSV space, the system implements dual-range thresholding:
+\begingroup\small
 \begin{align}
     \text{Mask}_1 &= \text{inRange}(\text{HSV}, [0, 100, 100], [10, 255, 255]) \\
     \text{Mask}_2 &= \text{inRange}(\text{HSV}, [160, 100, 100], [179, 255, 255]) \\
-    \text{Mask}_{final} &= \text{Mask}_1 \cup \text{Mask}_2
+    \text{Mask}_{f} &= \text{Mask}_1 \cup \text{Mask}_2
 \end{align}
+\endgroup
 This approach captures both low-end ($0-10$°) and high-end ($160-179$°) red hues while maintaining robust detection across different illumination conditions.\\
 \begin{figure}[H]
     \centering

@@ -44,9 +44,11 @@ This design ensures that the map publisher and planner are event-driven and coor
 \subsection{Integration Strategy and Version Control}
 \paragraph{Launch Files \& Node Orchestration.}
 A single composable launch file (`system.launch.py`) instantiates the three nodes and wires the remappings shown in Table~\ref{tab:channels}. This guarantees that every developer runs the exact same graph with one command:
+\begingroup\small
 \begin{verbatim}
 ros2 launch final_project system.launch.py sim:=true
 \end{verbatim}
+\endgroup
 
 \paragraph{Git Workflow.}
 The project lives in a mono‑repository on GitHub. We follow a trunk‑based strategy:
