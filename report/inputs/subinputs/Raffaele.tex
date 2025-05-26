@@ -101,8 +101,10 @@ where $I_{\max} = 5.0$ and $I_{\min} = -5.0$ prevent excessive integral buildup.
 \textbf{Velocity Coordination:}
 The orbital motion combines base velocities with correction terms from both control loops:
 \begin{align}
-v_{linear} &= v_{base} \cdot f_{distance}(e_d) \
-\omega_{angular} &= \omega_{base} + \alpha \cdot u_d + \beta \cdot p_{tower}
+\begin{split}
+    v_{linear} &= v_{base} \cdot f_{distance}(e_d) \omega_{angular} \\
+            &= \omega_{base} + \alpha \cdot u_d + \beta \cdot p_{tower}
+\end{split}
 \end{align}
 where:
 \begin{align}
@@ -132,8 +134,8 @@ Upon obstacle detection, the system initiates a secondary orbital pattern around
 \textbf{Return Navigation Logic:}
 The system implements logic for returning to the primary tower after obstacle avoidance.
 The return condition requires:
-\begin{align}
-(d_{Range2} > d_{clearance}) \land (d_{Range0} < d_{tower,\max}) \land \\
-\text{flag}_{almost\_avoided}
-\end{align}
+\begin{multline}
+(d_{Range2} > d_{clearance}) \land (d_{Range0} < d_{tower,\max})\\ 
+\land \text{flag}_{almost\_avoided}
+\end{multline}
 where $d_{clearance} = 10.0$ meters indicates obstacle clearance and $\text{flag}_{almost\_avoided}$ prevents premature return attempts.
