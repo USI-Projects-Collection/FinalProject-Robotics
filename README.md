@@ -23,16 +23,19 @@ source install/setup.[bash|zsh]
 ```
 
 # Maps of the topics used in the project
-| Funzione     | Topic           | Type                        | Publisher     | User |
-| ------------ | --------------- | --------------------------- | ---------------------- | ----------- |
-| Mappa 2-D    | `/map`          | `nav_msgs/OccupancyGrid`    | Mapper (o finto ↘︎)    | Planner     |
-| Pose attuale | `/odom` o `/tf` | `nav_msgs/Odometry` / `tf`  | Robo (sim)             | Planner     |
-| Goal         | `/goal_pose`    | `geometry_msgs/PoseStamped` | Nodo “missione” o RViz | Planner     |
-| Traiettoria  | `/plan`         | `nav_msgs/Path`             | Planner                | (debug)     |
-| Comandi      | `/cmd_vel`      | `geometry_msgs/Twist`       | Planner                | Robot       |
-| Comandi      | `/current_pose` | `geometry_msgs/PoseStamped` | Planner                | Robot       |
-| Goal reached | `/goal_reached` | `std_msgs/Bool`             | Planner                | MockMapPublisher |
-| Go again     | `/go_again`     | `std_msgs/Bool`             | MockMapPublisher       | Planner     |
+| Funzione     | Topic               | Type                        | Publisher                | User          |
+| ------------ | ------------------- | --------------------------- | ------------------------ | ------------- |
+| Mappa 2-D    | `/map`              | `nav_msgs/OccupancyGrid`    | MockMapPublisher         | Planner       |
+| Pose attuale | `/odom`             | `nav_msgs/Odometry`         | Robo (sim)               | Planner       |
+| Posa corrente| `/current_pose`     | `geometry_msgs/PoseStamped` | Planner                  | Robot         |
+| Goal         | `/goal_pose`        | `geometry_msgs/PoseStamped` | MockMapPublisher / RViz  | Planner       |
+| Traiettoria  | `/plan`             | `nav_msgs/Path`             | Planner                  | (debug)       |
+| Comandi vel  | `/rm0/cmd_vel`      | `geometry_msgs/Twist`       | Planner                  | Robot         |
+| Goal raggiunto| `/goal_reached`    | `std_msgs/Bool`             | Planner                  | MockMapPublisher |
+| Riprendi path| `/go_again`         | `std_msgs/Bool`             | MockMapPublisher         | Planner       |
+| Velocità     | `/cmd_vel`          | `geometry_msgs/Twist`       | ControllerNode           | Robo          |
+| Immagini     | `/rm0/camera/image_color` | `sensor_msgs/Image`   | Robo (sim)               | ControllerNode |
+| Rilevamento  | `/rm0/range_[0-3]`  | `sensor_msgs/Range`         | Robo (sim)               | ControllerNode |
 
 
 ## Esempio di pubblicazione dei topic per direzionare il robot

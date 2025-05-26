@@ -16,8 +16,59 @@ Both the \texttt{MockMapPublisher} and \texttt{PathPlannerNode}, which subscribe
 This loop allows the system to autonomously progress through a series of goals or states in a coordinated manner.
 This design ensures that the map publisher and planner are event-driven and coordinated with the controller logic, enabling robust and synchronized robot behavior across discrete tasks.
 
+\begin{table*}[h]
+  \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{@{} l l l l l @{}} 
+    \toprule
+    \textbf{Function} & \textbf{Topic} & \textbf{Type} & \textbf{Publisher} & \textbf{User} \\
+    \midrule
+    2D Map           & \texttt{/map}                       & \texttt{nav\_msgs/OccupancyGrid} & MockMapPublisher             & Planner       \\
+    Odometry         & \texttt{/odom}                      & \texttt{nav\_msgs/Odometry}      & Robo (sim)                   & Planner       \\
+    Current Pose     & \texttt{/current\_pose}             & \texttt{geometry\_msgs/PoseStamped} & Planner                  & Robot         \\
+    Goal             & \texttt{/goal\_pose}                & \texttt{geometry\_msgs/PoseStamped} & MockMapPublisher / RViz  & Planner       \\
+    Trajectory       & \texttt{/plan}                      & \texttt{nav\_msgs/Path}          & Planner                      & (debug)       \\
+    Velocity Commands& \texttt{/rm0/cmd\_vel}              & \texttt{geometry\_msgs/Twist}    & Planner                      & Robot         \\
+    Goal Reached     & \texttt{/goal\_reached}             & \texttt{std\_msgs/Bool}          & Planner                      & MockMapPublisher \\
+    Resume Path      & \texttt{/go\_again}                 & \texttt{std\_msgs/Bool}          & MockMapPublisher             & Planner       \\
+    Velocity         & \texttt{/cmd\_vel}                  & \texttt{geometry\_msgs/Twist}    & ControllerNode               & Robo          \\
+    Images           & \texttt{/rm0/camera/image\_color}   & \texttt{sensor\_msgs/Image}      & Robo (sim)                   & ControllerNode \\
+    Range Sensing    & \texttt{/rm0/range\_[0-3]}          & \texttt{sensor\_msgs/Range}      & Robo (sim)                   & ControllerNode \\
+    \bottomrule
+  \end{tabular}
+  }
+  \caption{ROS~2 communication channels used by the system.}
+  \label{tab:channels}
+\end{table*}
+
 \subsection{Integration Strategy and Version Control}
-% How modules were stitched together (launch files, CI, git workflow).
+\paragraph{Launch Files \& Node Orchestration.}
+A single composable launch file (`system.launch.py`) instantiates the three nodes and wires the remappings shown in Table~\ref{tab:channels}. This guarantees that every developer runs the exact same graph with one command:
+\begin{verbatim}
+ros2 launch final_project system.launch.py sim:=true
+\end{verbatim}
+
+\paragraph{Git Workflow.}
+The project lives in a mono‑repository on GitHub. We follow a trunk‑based strategy:
+\begin{itemize}
+  \item \texttt{main} — always buildable; protected, fast‑forward merges only.
+  \item \texttt{feat/\*} — short‑lived feature branches that merge via PR once CI passes.
+  \item \texttt{hotfix/\*} — emergency patches cherry‑picked into a tag and back‑merged into \texttt{main}.
+\end{itemize}
+Code style is enforced by a pre‑commit hook running \texttt{clang‑format} and \texttt{ruff}. Continuous Integration (\texttt{colcon build ‑‑packages‑select all}) and unit tests run in GitHub Actions on every push.
+
+\paragraph{Versioning of Third‑Party Assets.}
+Simulation worlds (`.ttt`) and large bag files are stored in Git LFS, keeping the main repository lightweight while ensuring reproducibility.
 
 \subsection{Observed Failure Modes \& Mitigations}
-% Latency issues, interface mismatches, etc.
+\begin{enumerate}
+  \item \textbf{Duplicate \texttt{/goal\_reached} notifications.}\\
+        Early versions latched the topic, causing every subscriber restart to retrigger the callback.  
+        \emph{Fix:} publish as non‑latched and gate the callback with a rising‑edge detector.
+  \item \textbf{Planner reading sensors out of turn.}\\
+        While the robot executed a goal, the planner continued to process range data, leading to sporadic replanning.  
+        \emph{Fix:} suspend sensor callbacks while \texttt{self.go\_again == False}.
+  \item \textbf{Stale TF frames.}\\
+        A mis‑configured static transform broadcaster produced frames older than the TF timeout, yielding large jumps in odometry.  
+        \emph{Fix:} discard transforms older than 0.5\,s and add a health-check in CI.
+\end{enumerate}
