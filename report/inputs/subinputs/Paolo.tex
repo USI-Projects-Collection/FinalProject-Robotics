@@ -1,3 +1,5 @@
+Scripts in this section can be found in package \texttt{path\_planner} - \texttt{path\_planner.py} and package \texttt{mock\_map} - \texttt{mock\_map\_publisher.py}.
+
 \subsubsection{Objectives and Requirements}
 The goal of our global planner is to compute, at runtime, a collision-free route from the robot’s current pose to the next tower in the Tower Dropper scenario. The planner must respect:
 \begin{itemize}
@@ -7,24 +9,24 @@ The goal of our global planner is to compute, at runtime, a collision-free route
 \end{itemize}
 
 \subsubsection{Algorithm Selection and Design}
-We surveyed classic grid-based planners (Dijkstra for guaranteed optimality, RRT for sampling-based routes) but settled on \textbf{A*} on an occupancy grid for its simplicity and determinism. In our \texttt{PathPlannerNode}:
+I surveyed classic grid-based planners (Dijkstra for guaranteed optimality, RRT for sampling-based routes) but settled on \textbf{A*} on an occupancy grid for its simplicity and determinism. In our \texttt{PathPlannerNode}:
 \begin{enumerate}
   \item \textbf{Grid representation:} a 2D \texttt{NumPy} array of occupancy values (0 = free, $\geq$50 = occupied).
   \item \textbf{Search:} an 8-connected A* using a min-heap (\texttt{heapq}) keyed by $f = g + h$, where $g$ is accumulated path cost and $h$ the Euclidean distance to goal. Orthogonal moves cost 1; diagonal moves cost $\sqrt{2}$. Corner-cutting checks prevent invalid diagonals.
-  \item \textbf{Path pruning:} after finding the raw A* path, we remove unnecessary waypoints by testing straight-line visibility with a Bresenham-based \texttt{\_has\_los} check.
+  \item \textbf{Path pruning:} after finding the raw A* path, I remove unnecessary waypoints by testing straight-line visibility with a Bresenham-based \texttt{\_has\_los} check.
 \end{enumerate}
 
 \subsubsection{Map Representation, Visualization \& Preprocessing}
-To debug and tune our planner, we relied heavily on \texttt{RViz2}, subscribing to the \texttt{/map} and \texttt{/plan} topics to inspect both the occupancy grid and computed paths in real time. Figures~\ref{fig:raw-pruned} and~\ref{fig:inflated} illustrate this process.
+To debug and tune our planner, I relied heavily on \texttt{RViz2}, subscribing to the \texttt{/map} and \texttt{/plan} topics to inspect both the occupancy grid and computed paths in real time. Figures~\ref{fig:raw-pruned} and~\ref{fig:inflated} illustrate this process.
 
 \begin{figure}[ht]
   \centering
-  \begin{minipage}[b]{0.24\textwidth}
+  \begin{minipage}[b]{0.23\textwidth}
     \centering
     \includegraphics[width=\linewidth]{Images/path1.png}
   \end{minipage}
   \hfill
-  \begin{minipage}[b]{0.24\textwidth}
+  \begin{minipage}[b]{0.23\textwidth}
     \centering
     \includegraphics[width=\linewidth]{Images/path2.png}
   \end{minipage}
@@ -32,7 +34,7 @@ To debug and tune our planner, we relied heavily on \texttt{RViz2}, subscribing 
   \label{fig:raw-pruned}
 \end{figure}
 
-Subsequently, we introduced obstacle inflation to enforce the robot’s safety margin and avoid corner collisions:
+Subsequently, I introduced obstacle inflation to enforce the robot’s safety margin and avoid corner collisions:
 
 \begin{figure}[ht]
   \centering
@@ -74,10 +76,10 @@ The planner is implemented as a ROS 2 node with:
     \textit{Solution:} added a \texttt{static\_transform\_publisher} in the launch file to broadcast an identity \texttt{map → odom}.
   \item[Unknown-cell “blockades”] 
     \textit{Symptom:} planner routed through unexplored (–1) cells on SLAM maps.  
-    \textit{Diagnosis:} we treated –1 as free in our occupancy threshold.  
+    \textit{Diagnosis:} I treated –1 as free in our occupancy threshold.  
     \textit{Solution:} in \texttt{map\_cb}, mark any \texttt{grid[y][x] < 0} as 100 before inflation, treating unknown as occupied.
   \item[Occupied goal cell handling] 
     \textit{Symptom:} when running the tower-knockdown process, the robot sometimes started inside a region forbidden by the inflated map, causing “no path found.”  
     \textit{Diagnosis:} both start and goal cells were disallowed by inflation.  
-    \textit{Solution:} implemented \texttt{\_nearest\_free(goal\_cell)}, which performs an orthogonal BFS to locate the closest free cell; we then replace the goal with that cell and replan automatically.
+    \textit{Solution:} implemented \texttt{\_nearest\_free(goal\_cell)}, which performs an orthogonal BFS to locate the closest free cell; I then replace the goal with that cell and replan automatically.
 \end{description}
