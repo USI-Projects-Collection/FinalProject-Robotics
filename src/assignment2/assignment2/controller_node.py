@@ -70,7 +70,7 @@ class ControllerNode(Node):
         self.look_around_start_yaw = None
         
         # Target distance from the tower
-        self.target_distance = 2.0
+        self.target_distance = 1.0
         self.obstacle_target_distance = 0.2
         self.has_almost_avoided_obstacle = False
         
@@ -102,6 +102,7 @@ class ControllerNode(Node):
         
         self.blaster_trans = np.array([0.20, 0, 0.2])
         self.seen_tower = False
+        self.align_ticks = 0
         self.old_tower_width = 0
         self.min_tower_width = np.inf
         self.max_tower_width = 0
@@ -304,50 +305,50 @@ class ControllerNode(Node):
             # METHOD 1
             # Analyze tower shape to detect if facing a complete side
             # Find contours of the tower
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            max_row, width_color = self.get_maximum_width(visualize_mask)
-            if contours:
-                # Get the largest contour (the tower)
-                largest_contour = max(contours, key=cv2.contourArea)
+            # contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            # max_row, width_color = self.get_maximum_width(visualize_mask)
+            # if contours:
+            #     # Get the largest contour (the tower)
+            #     largest_contour = max(contours, key=cv2.contourArea)
                 
-                # Calculate bounding rectangle
-                x, y, w, h = cv2.boundingRect(largest_contour)
+            #     # Calculate bounding rectangle
+            #     x, y, w, h = cv2.boundingRect(largest_contour)
                 
-                # Calculate aspect ratio (width/height)
-                aspect_ratio = w / h if h > 0 else 0
+            #     # Calculate aspect ratio (width/height)
+            #     aspect_ratio = w / h if h > 0 else 0
 
-                # Check if robot is facing a complete side of the tower
-                if aspect_ratio > 0.5:
-                    # Tower is facing the robot
-                    self.get_logger().info("Tower is facing the robot")
-                    self.state = "align_tower"
+            #     # Check if robot is facing a complete side of the tower
+            #     if aspect_ratio > 0.5:
+            #         # Tower is facing the robot
+            #         self.get_logger().info("Tower is facing the robot")
+            #         self.state = "align_tower"
             
             # METHOD 2
-            # max_row, width_color = self.get_maximum_width(visualize_mask)
-            # if self.check_tower_in_view(max_row):
-            #     if width_color < self.min_tower_width:
-            #         self.min_tower_width = width_color 
-            #     np.set_printoptions(threshold=np.inf)
-            #     # self.get_logger().info(f"{visualize_mask[0]}")
-            #     for i in range(visualize_mask.shape[0]-1, -1, -1):
-            #         row = visualize_mask[i]
-            #         # self.get_logger().info(f"{row}")
-            #         row_color = 0
-            #         if any(itertools.chain(*row)):
-            #             for pixel in row:
-            #                 if any(pixel):
-            #                     row_color += 1
-            #             # self.get_logger().info(f'row color: {row_color}, width color: {width_color}')
-            #             # self.get_logger().info(f"row color: {row_color}, max width: {width_color}")
-            #             if row_color >= width_color-5 and row_color <= width_color+5 and width_color > self.min_tower_width + 20:
-            #                 self.state = "align_tower"
-            #                 self.get_logger().info(f"min width: {self.min_tower_width}, width current: {width_color}")
-            #                 # You may want to return True here or set a flag
-            #                 break
-            #             else:
-            #                 break
-            #         else:
-            #             continue
+            max_row, width_color = self.get_maximum_width(visualize_mask)
+            if self.check_tower_in_view(max_row):
+                if width_color < self.min_tower_width:
+                    self.min_tower_width = width_color 
+                np.set_printoptions(threshold=np.inf)
+                # self.get_logger().info(f"{visualize_mask[0]}")
+                for i in range(visualize_mask.shape[0]-1, -1, -1):
+                    row = visualize_mask[i]
+                    # self.get_logger().info(f"{row}")
+                    row_color = 0
+                    if any(itertools.chain(*row)):
+                        for pixel in row:
+                            if any(pixel):
+                                row_color += 1
+                        # self.get_logger().info(f'row color: {row_color}, width color: {width_color}')
+                        # self.get_logger().info(f"row color: {row_color}, max width: {width_color}")
+                        if row_color >= width_color-5 and row_color <= width_color+5 and width_color > self.min_tower_width + 20:
+                            self.state = "align_tower"
+                            self.get_logger().info(f"min width: {self.min_tower_width}, width current: {width_color}")
+                            # You may want to return True here or set a flag
+                            break
+                        else:
+                            break
+                    else:
+                        continue
 
             moments = cv2.moments(mask)
             if moments["m00"] > 0:
@@ -504,6 +505,7 @@ class ControllerNode(Node):
                     cmd_vel.linear.x = 0.0
                     cmd_vel.angular.z = 0.0
                     self.state = "position_for_orbit"
+                    self.min_tower_width = np.inf
                     self.get_logger().info(f"Tower found at distance: {self.range_1:.2f}m, repositioning for left orbit")
 
         elif self.state == "avoid_obstacle":
@@ -572,15 +574,24 @@ class ControllerNode(Node):
             if not self.seen_tower:
                 cmd_vel.linear.x = 0.0
                 cmd_vel.angular.z = -0.3
-                if self.range_1 != self.range_3:
+                if self.range_1 <= 2:
                     self.seen_tower = True
+                self.get_logger().info(f"Seen tower --------------")
             else:
-                if self.range_1 != self.range_3:
+                if self.range_1 <= 2:
                     cmd_vel.linear.x = 0.0
                     cmd_vel.angular.z = -0.3
+                    self.get_logger().info(f"Spinning -------------")
                 else:
-                    self.state = 'shoot_tower'
-        
+                    if self.align_ticks >= 3:
+                        self.get_logger().info(f"Shooting -------------")
+                        self.seen_tower = False
+                        self.state = 'shoot_tower'
+                    else:
+                        self.align_ticks += 1
+                        cmd_vel.linear.x = 0.0
+                        cmd_vel.angular.z = -0.3
+                        
         elif self.state == "shoot_tower":
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0

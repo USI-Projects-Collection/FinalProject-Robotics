@@ -24,7 +24,7 @@ class PathPlannerNode(Node):
         # -- path following --
         self.path_points   = []     # list[(x, y)] in world coords
         self.lookahead     = 0.25   # [m] look‑ahead distance for pure‑pursuit
-        self.waypoint_tol  = 0.2   # [m] stop this far before hitting the tower
+        self.waypoint_tol  = 0.4   # [m] stop this far before hitting the tower
         self.max_lin       = 0.25   # [m/s]
         self.max_ang       = 1.5    # [rad/s]
 
