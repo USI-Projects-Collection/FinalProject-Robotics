@@ -1,5 +1,20 @@
 \subsection{ROS 2 Node Graph \& Communication Channels}
-% Describe topics/services and message flow.
+The communication between the three ROS2 nodes in the system — \texttt{MockMapPublisher}, \texttt{PathPlannerNode}, and \texttt{ControllerNode} — is established through various ROS topics. Here's an overview of their coordination logic:\\
+At initialization, the \texttt{MockMapPublisher} and \texttt{PathPlannerNode} nodes sets the internal flag \texttt{self.go\_again = True} and the \texttt{ControllerNode} sets \texttt{self.goal\_reached = False}.
+These initial states allow both the \texttt{MockMapPublisher} and \texttt{PathPlannerNode} to begin processing immediately, while the \texttt{ControllerNode} waits for confirmation that a goal has been reached.
+During operation, once the \texttt{PathPlannerNode} reaches its goal, it publishes a velocity command \texttt{cmd\_vel = (0.0, 0.0)} to bring the robot to a halt. Then publishes the following message to notify other nodes of goal completion:
+\[
+    \texttt{self.pub\_goal\_reached.publish(Bool(data=True))}
+\]
+and sets $\texttt{self.go\_again = False}$ to indicate that no further planning is needed until explicitly requested again.
+The \texttt{ControllerNode}, which subscribes to the \texttt{/goal\_reached} topic, receives this message and updates its internal flag ($\texttt{self.goal\_reached = True}$). Upon completing its own task (such as analyzing sensor data or interacting with the tower), it publishes:
+\[
+\texttt{self.turn\_ended.publish(Bool(data=True))}
+\]
+on the topic \texttt{/go\_again}.
+Both the \texttt{MockMapPublisher} and \texttt{PathPlannerNode}, which subscribe to \texttt{/go\_again}, receive this signal and set $\texttt{self.go\_again = True}$.
+This loop allows the system to autonomously progress through a series of goals or states in a coordinated manner.
+This design ensures that the map publisher and planner are event-driven and coordinated with the controller logic, enabling robust and synchronized robot behavior across discrete tasks.
 
 \subsection{Integration Strategy and Version Control}
 % How modules were stitched together (launch files, CI, git workflow).
