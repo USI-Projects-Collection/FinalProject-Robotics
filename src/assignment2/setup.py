@@ -24,8 +24,6 @@ setup(
     entry_points={
         'console_scripts': [
             'controller_node = assignment2.controller_node:main',
-            'controller_node_wall = assignment2.controller_node_wall:main',
-            'mapping_node = assignment2.mapping_node:main',
         ],
     },
 )
