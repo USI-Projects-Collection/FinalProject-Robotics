@@ -532,6 +532,7 @@ class ControllerNode(Node):
                     if self.align_ticks >= 3:
                         self.get_logger().info(f"Shooting -------------")
                         self.seen_tower = False
+                        self.align_ticks = 0
                         self.state = 'shoot_tower'
                     else:
                         self.align_ticks += 1
